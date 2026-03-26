@@ -1,11 +1,11 @@
 from langgraph.graph import END
 from langchain_community.document_loaders import PyMuPDFLoader
-from langchain_core.output_parsers import JsonOutputParser
+from langchain_core.output_parsers import PydanticOutputParser
 from .state import State
 from ..llm import light_llm, heavy_llm
 from ..config import config
 from . import prompts, schemas
-from ...kb.core.article_part import ArticlePart, ArticlePartWithEmbeddableStrings
+from kb.core.article_part import ArticlePart, ArticlePartWithEmbeddableStrings
 import arxiv
 
 async def fetch_article_content(state: State):
@@ -23,29 +23,34 @@ async def fetch_article_content(state: State):
     all_content = ""
     async for doc in loader.alazy_load():
         all_content += doc.page_content
+    
+    return {
+        "all_content": all_content
+    }
 
 async def semantically_split_content(state: State):
-    output_parser = JsonOutputParser(pydantic_object=schemas.SemanticContentSplitOutputSchema())
+    output_parser = PydanticOutputParser(pydantic_object=schemas.SemanticContentSplitOutputSchema)
     chain = prompts.SEMANTICALLY_SPLIT_CONTENT_PROMPT | light_llm | output_parser
 
     start = 0
     content_blocks = []
     while start < len(state.all_content):
+        print(start/len(state.all_content))
+
         content = state.all_content[start: start + config.learner_splitter_max_text_length]
         response = await chain.ainvoke({
-            "SAMPLE_OUTPUT": [24],
             "OUTPUT_INSTRUCTIONS": output_parser.get_format_instructions(),
             "TEXT": content
         })
 
         new_content_blocks = []
         if len(response.indices) == 0:
-            new_content_blocks.append((start, len(state.all_content) - 1))
             start = len(state.all_content)
         else:
-            for idx in response.indices:
-                new_content_blocks.append((start, idx - 1))
-                start = idx
+            base = start
+            for (s, e) in response.indices:
+                new_content_blocks.append((base + s, base + e - 1))
+                start = base + e
         
         content_blocks.extend(new_content_blocks)
     
@@ -54,7 +59,7 @@ async def semantically_split_content(state: State):
     }
 
 async def generate_embeddable_strings(state: State):
-    output_parser = JsonOutputParser(pydantic_object=schemas.EmbeddableStringsOutputSchema())
+    output_parser = PydanticOutputParser(pydantic_object=schemas.EmbeddableStringsOutputSchema)
     chain = prompts.EMBEDDABLE_STRINGS_GENERATOR_PROMPT | heavy_llm | output_parser
 
     results = await chain.abatch([{

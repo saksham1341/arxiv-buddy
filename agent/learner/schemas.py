@@ -2,7 +2,7 @@ from pydantic import BaseModel, Field
 
 
 class SemanticContentSplitOutputSchema(BaseModel):
-    indices: list[int] = Field(default=[], description="List of indices to split the content at.")
+    indices: list[tuple[int, int]] = Field(default=[], description="List of pairs of starting and ending indices to split the content at.")
 
 
 class EmbeddableStringsOutputSchema(BaseModel):

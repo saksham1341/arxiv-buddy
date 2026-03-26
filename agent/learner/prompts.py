@@ -13,60 +13,94 @@ The pipeline works as follows:
 
 ### Your Goal:
 
-Split the text into **semantic sections that maximize retrieval quality** for question answering.
+Select and extract **high-value semantic sections** that maximize retrieval quality for question answering.
+
+You are allowed to **skip irrelevant or low-value content** that is unlikely to help answer user questions.
+
+---
+
+### What to INCLUDE:
+
+Include sections that:
+- Contain **definitions, explanations, concepts, or descriptions**
+- Provide **factual, instructional, or technical information**
+- Contain **arguments, insights, or reasoning**
+- Would help answer likely user questions
+
+---
+
+### What to SKIP:
+
+Do NOT include sections that are not useful for retrieval, such as:
+- References / bibliography
+- Citations or citation lists
+- Acknowledgments
+- Table of contents
+- Headers/footers
+- Page numbers
+- Repeated boilerplate text
+- Copyright notices
+- Purely decorative or formatting content
+- Lists of names without explanatory context
+
+If a portion of text contains both useful and useless content, include only the useful part.
+
+---
 
 ### Guidelines for Splitting:
 
-1. Each section should contain a **self-contained, meaningful unit of information** that can answer or contribute to answering a question.
-2. Keep together content that belongs to the same concept, even if it spans multiple paragraphs.
+1. Each section should contain a **self-contained, meaningful unit of information**.
+2. Keep together content that belongs to the same concept, even across multiple paragraphs.
 3. Split when there is a **clear topic shift, heading change, or conceptual boundary**.
 4. Avoid sections that are:
+   - Too small (lack context)
+   - Too large (contain multiple unrelated ideas)
+5. Each section should be suitable for generating a semantic description that clearly answers:
+   - What is this about?
+   - What questions could it answer?
 
-   * Too small (lack context for answering questions)
-   * Too large (contain multiple unrelated ideas that hurt retrieval precision)
-5. Prefer splits that would allow a generated description to clearly capture:
-
-   * What the section is about
-   * What questions it could answer
+---
 
 ### Instructions:
 
 * Do NOT modify, rewrite, or summarize the text.
 * Use the **original character indices** of the input text.
-* Only determine the split boundaries.
+* Return only sections that you decide to KEEP.
+* Skipped content should simply not appear in the output.
+
+---
 
 ### Output Format:
 
-Return a JSON array of integers representing the **end index (exclusive)** of each section **EXCEPT the final section**.
+Return a JSON array of `[start, end)` index pairs representing the selected sections.
+
+Example:
+[[0, 120], [240, 560], [800, 1020]]
+
+---
 
 ### Constraints:
 
-* Indices must be strictly increasing.
-* Do NOT include 0 as a boundary.
-* Do NOT include the final index (i.e., the length of the text).
-* Sections must be contiguous and cover the text when combined with the implicit final section.
-* Each section should be semantically meaningful and useful for retrieval.
-* If the entire text forms a single coherent semantic unit, you MAY return an empty list `[]`.
+* Indices must be:
+  - Valid character offsets
+  - Strictly increasing
+  - Non-overlapping
+* Each pair must follow: start < end
+* Do NOT include empty sections
+* Sections do NOT need to cover the entire text (skipping is allowed)
+* If no useful content exists, return an empty list `[]`
 
-### Example:
-
-Input text:
-"Introduction\nThis is a paper.\nMethods\nWe did experiments."
-
-Output:
-{SAMPLE_OUTPUT}
-
-(Here, the final section from index 24 to the end is implicit and omitted.)
+---
 
 ### Output Format Instructions
 
 {OUTPUT_INSTRUCTIONS}
 
+---
+
 ### Text to process:
 
-{TEXT}
-
-""")
+{TEXT}""")
 
 EMBEDDABLE_STRINGS_GENERATOR_PROMPT = PromptTemplate.from_template(template="""
 You are given a section of text extracted from a PDF. This will be used in a **retrieval-augmented generation (RAG)** system.
