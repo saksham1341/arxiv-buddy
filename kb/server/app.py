@@ -1,7 +1,7 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Query
 from pydantic import BaseModel, Field
-from ..core.article_part import ArticlePart
+from ..core.article_part import ArticlePart, ArticlePartWithEmbeddableStrings
 from ..core.embedder import embedder
 from .config import config
 from .db import (
@@ -49,11 +49,6 @@ async def index():
         success=True,
         size=await get_total_object_count(engine, Item)
     )
-
-
-class ArticlePartWithEmbeddableStrings(BaseModel):
-    part: ArticlePart = Field(description="An article part.")
-    embeddable_strings: list[str] = Field(description="A list of efficient strings to embed and store in the knowledge base, mapped to the article part.")
 
 
 class AddToKnowledgeBaseRequest(BaseModel):
