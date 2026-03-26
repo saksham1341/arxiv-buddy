@@ -61,3 +61,14 @@ async def prepare_database(engine: AsyncEngine):
     
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+async def get_article_entry_count(engine: AsyncEngine, article_id: str) -> int:
+    async with AsyncSession(engine) as session:
+        result = await session.execute(
+            select(func.count())
+            .select_from(Item)
+            .where(Item.article_id == article_id)
+        )
+        count = result.scalar() or 0
+
+    return count

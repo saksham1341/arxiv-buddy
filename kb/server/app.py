@@ -10,6 +10,7 @@ from .db import (
     get_closest_items,
     create_async_engine,
     get_total_object_count,
+    get_article_entry_count,
     URL,
     Item
 )
@@ -120,4 +121,16 @@ async def query(q: list[str] = Query()):
 
     return QueryKnowledgeBaseResponse(
         parts=result
+    )
+
+
+class IsLearnedResponse(BaseModel):
+    is_learned: bool = Field(description="A boolean representing if an article is already present in the knowledge base.")
+
+@app.get("/is_learned", name="Is an article in the knowledge base", response_model=IsLearnedResponse)
+async def is_learned(article_id: str = Query()):
+    entry_count = await get_article_entry_count(engine, article_id)
+
+    return IsLearnedResponse(
+        is_learned=(entry_count > 0)
     )

@@ -34,6 +34,17 @@ class KBClient:
 
             return response.json()["parts"]
     
+    async def is_learned(self, article_id: str) -> bool:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                url=f"{self._kb_url}/is_learned",
+                params={
+                    "article_id": article_id
+                }
+            )
+
+            return response.json()["is_learned"]
+    
     def create_article_part(self, id: str, start: int, end: int) -> ArticlePart:
         return ArticlePart(
             id=id,
