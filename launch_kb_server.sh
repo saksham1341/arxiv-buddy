@@ -1,1 +1,1 @@
-kb_server_database_username=postgres kb_server_database_password=abc uvicorn kb.server.app:app --port 8000 --reload
+uvicorn kb.server.app:app --port $PORT --reload
