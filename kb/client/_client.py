@@ -20,7 +20,6 @@ class KBClient:
                 }
             )
 
-
             return response.json()["count"]
     
     async def query(self, q: list[str]) -> list[list[ArticlePart]]:
@@ -32,7 +31,7 @@ class KBClient:
                 }
             )
 
-            return response.json()["parts"]
+            return [[self.create_article_part(**part) for part in part_list] for part_list in response.json()["parts"]]
     
     async def is_learned(self, article_id: str) -> bool:
         async with httpx.AsyncClient() as client:
