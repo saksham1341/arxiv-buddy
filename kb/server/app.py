@@ -17,6 +17,15 @@ from .db import (
 import asyncio
 
 
+engine = create_async_engine(URL.create(
+    drivername="postgresql+psycopg",
+    username=config.database_username,
+    password=config.database_password,
+    host=config.database_host,
+    port=config.database_port,
+    database=config.database_name
+))
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # prepare the database
@@ -31,14 +40,6 @@ app = FastAPI(
     debug=True,
     lifespan=lifespan
 )
-engine = create_async_engine(URL.create(
-    drivername="postgresql+psycopg",
-    username=config.database_username,
-    password=config.database_password,
-    host=config.database_host,
-    port=config.database_port,
-    database=config.database_name
-))
 
 class IndexResponse(BaseModel):
     success: bool = Field(description="A boolean representing success.")
