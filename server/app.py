@@ -1,20 +1,22 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Path, BackgroundTasks
 from fastapi.sse import EventSourceResponse
 import arxiv
 from kb.client import KBClient
-from kb.core.article_part import ArticlePart
 from .config import config
-from agent.learner import agent as learner_agent
-from agent.searcher import agent as searcher_agent
-from langchain_community.document_loaders import PyMuPDFLoader
-from .db import URL, prepare_database, get_conversation_history, get_conversation_items_after_timestamp
+from . import db, schemas, notifications
 from sqlalchemy.ext.asyncio import create_async_engine
 from contextlib import asynccontextmanager
 import asyncio
+import json
 from datetime import datetime
 
+# agents
+from agent.learner import build_learner
+from agent.searcher import build_searcher
+from agent.orchestrator import build_orchestrator
 
-engine = create_async_engine(URL.create(
+
+engine = create_async_engine(db.URL.create(
     drivername="postgresql+psycopg",
     username=config.database_username,
     password=config.database_password,
@@ -26,7 +28,7 @@ engine = create_async_engine(URL.create(
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # prepare the database
-    await prepare_database(engine)
+    await db.prepare_database(engine)
 
     yield
 
@@ -39,53 +41,61 @@ app = FastAPI(
 )
 kb_client = KBClient(host=config.kb_host, port=config.kb_port)
 arxiv_api_client = arxiv.Client(page_size=10)
+searcher = build_searcher()
+learner = build_learner()
+orchestrator = build_orchestrator(searcher_agent=searcher, learner_agent=learner)
 
-async def find_relevant_articles_to_learn(q: str) -> dict[str, str]:
-    relevant_articles = (await searcher_agent.ainvoke({
-        "query": q,  # type: ignore
-    }, config={
-        "configurable": {
-            "thread_id": "server_searcher_test",
-            "arxiv_api_client": arxiv_api_client  # type: ignore
-        },
-    }))["relevant_articles"]
-
-    return relevant_articles
-
-async def learn_article(article_id: str) -> int:
-    if await kb_client.is_learned(article_id):
-        return 0
+@app.post("/chat/{conversation_id}", response_model=schemas.SendMessageResponse)
+async def send_message_to_chat(req: schemas.SendMessageRequest, background_tasks: BackgroundTasks, conversation_id: str = Path(...)):
+    conversation_state = await db.get_conversation_state(engine, conversation_id)
+    if conversation_state is None:  # new conversation
+        await db.set_conversation_state(engine, conversation_id, db.ConversationStateEnum.free)
+    elif conversation_state == db.ConversationStateEnum.busy:  # agent already running for this conversation
+        return schemas.SendMessageResponse(
+            success=False,
+            error="Agent is busy right now."
+        )
     
-    apwes = (await learner_agent.ainvoke({
-        "article_id": article_id  # type: ignore
-    }, config={
-        "configurable": {
-            "thread_id": "server_learner_test",
-        }
-    }))["article_parts_with_embeddable_strings"]
+    # generate message history
+    conv_history = await db.get_conversation_history(engine, conversation_id)
+    message_history_parts = []
+    for item in conv_history:
+        if item.item_type == db.ConversationItemTypes.user_message:
+            data = json.loads(item.data.decode())
+            message_history_parts.append(f"==== USER MESSAGE ===\n{data['message']}")
+        elif item.item_type == db.ConversationItemTypes.ai_message:
+            data = json.loads(item.data.decode())
+            message_history_parts.append(f"=== AI MESSAGE ===\n{data['message']}")
+    message_history = "\n".join(message_history_parts)
 
-    await kb_client.add(apwes)
-
-    return len(apwes)
-
-async def generate_context_from_article_parts(aps: list[ArticlePart]) -> str:
-    # TODO: use the client (frontend) to offload api calls to arxiv
-    article_ids = [ap.id for ap in aps]
-    search = arxiv.Search(id_list=article_ids)
-    results = arxiv_api_client.results(search)
-
-    context = ""
-    for idx, res in enumerate(results):
-        loader = PyMuPDFLoader(file_path=str(res.pdf_url), mode="single")
-        doc = (await loader.aload())[0]
-        context += "\n" + doc.page_content[aps[idx].start : aps[idx].end + 1]
+    # agent run
+    async def run_agent_as_task():
+        try:
+            await db.set_conversation_state(engine, conversation_id, db.ConversationStateEnum.busy)
+            await orchestrator.ainvoke({
+                "user_message": req.message,
+                "message_history": message_history
+            }, config={  # type: ignore
+                "configurable": {
+                    "thread_id": conversation_id,
+                    "notifications": notifications.generate_notification_functions(engine),
+                    "kb_client": kb_client,
+                    "arxiv_api_client": arxiv_api_client
+                }
+            })
+        finally:
+            await db.set_conversation_state(engine, conversation_id, db.ConversationStateEnum.free)
     
-    return context
+    asyncio.create_task(run_agent_as_task())
+
+    return schemas.SendMessageResponse(
+        success=True
+    )
 
 @app.get("/chat/{conversation_id}", response_class=EventSourceResponse)
-async def connect_to_chat(conversation_id: str):
+async def connect_to_chat(conversation_id: str = Path()):
     # first we send the complete coversation history
-    history = await get_conversation_history(engine, conversation_id)
+    history = await db.get_conversation_history(engine, conversation_id)
     # parse ConversationItems to dictionary
     history = [item.to_dict() for item in history]
 
@@ -94,7 +104,7 @@ async def connect_to_chat(conversation_id: str):
     # yield new entries
     last_timestamp = history[-1]["timestamp"] if history else datetime.fromtimestamp(0)
     while await asyncio.sleep(0.1, True):
-        new_items = await get_conversation_items_after_timestamp(engine, conversation_id, last_timestamp)
+        new_items = await db.get_conversation_items_after_timestamp(engine, conversation_id, last_timestamp)
 
         for item in new_items:
             yield item.to_dict()
