@@ -35,8 +35,6 @@ async def semantically_split_content(state: State):
     start = 0
     content_blocks = []
     while start < len(state.all_content):
-        print(start/len(state.all_content))
-
         content = state.all_content[start: start + config.learner_splitter_max_text_length]
         response = await chain.ainvoke({
             "OUTPUT_INSTRUCTIONS": output_parser.get_format_instructions(),
