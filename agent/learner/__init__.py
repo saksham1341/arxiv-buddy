@@ -9,14 +9,14 @@ def build_learner():
         state_schema=State
     )
 
-    builder.add_node("fac", fetch_article_content)
-    builder.add_node("sc", split_content)
-    builder.add_node("ges", generate_embeddable_strings)
+    builder.add_node("fetch_article_content", fetch_article_content)
+    builder.add_node("split_article_content", split_content)
+    builder.add_node("generate_embeddable_strings", generate_embeddable_strings)
 
-    builder.add_edge(START, "fac")
-    builder.add_edge("fac", "sc")
-    builder.add_edge("sc", "ges")
-    builder.add_edge("ges", END)
+    builder.add_edge(START, "fetch_article_content")
+    builder.add_edge("fetch_article_content", "split_article_content")
+    builder.add_edge("split_article_content", "generate_embeddable_strings")
+    builder.add_edge("generate_embeddable_strings", END)
 
     return builder.compile(
         checkpointer=InMemorySaver()

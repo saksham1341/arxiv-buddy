@@ -6,4 +6,3 @@ class State(BaseModel):
     search_intention: str | None = None
     generated_search_queries: list[str] = []
     fetched_articles: dict[str, str] = {}
-    relevant_articles: dict[str, str] = {}

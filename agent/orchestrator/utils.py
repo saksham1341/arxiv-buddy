@@ -15,7 +15,7 @@ async def find_relevant_articles_to_learn(arxiv_api_client: arxiv.Client, search
             "thread_id": conversation_id,
             "arxiv_api_client": arxiv_api_client  # type: ignore
         },
-    }))["relevant_articles"]
+    }))["fetched_articles"]
 
     return relevant_articles
 

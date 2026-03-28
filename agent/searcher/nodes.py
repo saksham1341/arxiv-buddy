@@ -53,38 +53,12 @@ async def search_arxiv(client: arxiv.Client, q: str):
 async def fetch_articles(state: State, config: RunnableConfig):
     resp = await asyncio.gather(*[search_arxiv(config["configurable"]["arxiv_api_client"], q) for q in state.generated_search_queries])  # type: ignore
 
-    fetched_articles = {}
+    fetched_articles = state.fetched_articles.copy()
     for r in resp:
         fetched_articles.update(r)
     
     return {
         "fetched_articles": fetched_articles
-    }
-
-async def relevance_filter(state: State):
-    if not state.fetched_articles:
-        return {
-            "relevant_articles": state.relevant_articles
-        }
-    
-    prompt = prompts.RELEVANCE_FILTERING_QUERY
-    output_parser = PydanticOutputParser(pydantic_object=schemas.RelevantFilterOutput)
-
-    chain = prompt | light_llm | output_parser
-
-    resp = await chain.ainvoke(input={
-        "OUTPUT_FORMAT": output_parser.get_format_instructions(),
-        "QUERY": state.search_intention,
-        "ARTICLES": state.fetched_articles
-    })
-
-    udpated_relevant_articles = state.relevant_articles
-    for article_id in resp.relevant_article_ids:
-        if article_id not in udpated_relevant_articles:
-            udpated_relevant_articles[article_id] = state.fetched_articles[article_id]
-
-    return {
-        "relevant_articles": udpated_relevant_articles
     }
 
 async def coverage_decider(state: State):
@@ -96,7 +70,7 @@ async def coverage_decider(state: State):
     resp = await chain.ainvoke(input={
         "OUTPUT_FORMAT": output_parser.get_format_instructions(),
         "QUERY": state.query,
-        "ARTICLES": state.relevant_articles
+        "ARTICLES": state.fetched_articles
     })
 
     if resp.coverage_fulfilled:
