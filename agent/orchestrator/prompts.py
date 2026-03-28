@@ -86,9 +86,9 @@ You MUST return a structured response in the following format:
 """)
 
 KNOWLEDGE_BASE_CONTEXT_COVERAGE_CHECKER_PROMPT = PromptTemplate.from_template(template="""
-You are a Knowledge Base Context Coverage Checker and Research Query Generator.
+You are a Knowledge Base Context Coverage Checker and Research Topic Generator.
 
-Your job is to evaluate whether the provided **retrieved context** is sufficient to answer the user’s query. If it is not sufficient, you must generate the **single most important research query** to expand the knowledge base.
+Your job is to evaluate whether the provided **retrieved context** is sufficient to answer the user’s query. If it is not sufficient, you must generate the **single most important research topic** to expand the knowledge base.
 
 ---
 
@@ -103,7 +103,7 @@ Your job is to evaluate whether the provided **retrieved context** is sufficient
 
 1. Analyze the retrieved context in relation to the user query
 2. Determine whether the context is sufficient to fully answer the query
-3. If NOT sufficient, generate ONE high-impact research query
+3. If NOT sufficient, generate ONE high-impact research topic
 
 ---
 
@@ -121,21 +121,23 @@ Your job is to evaluate whether the provided **retrieved context** is sufficient
 
 ---
 
-## Research Query Rules (CRITICAL)
+## Research Topic Rules (CRITICAL)
 
-If INSUFFICIENT, generate EXACTLY ONE query that:
+If INSUFFICIENT, generate EXACTLY ONE topic that:
 
-- Targets the **most critical missing piece of information**
-- Maximizes information gain
-- Is specific and unambiguous
-- Is suitable for external research
+- Represents a **broader subject area**, not a search-style query
+- Captures the **core missing knowledge domain**
+- Is concise but conceptually meaningful
+- Is suitable for guiding further research or knowledge base expansion
 
-### Good Queries:
-- "latest advancements in quantum computing 2025"
+### Good Topics:
+- "Quantum Computing"
+- "Long-term Effects of Nonsteroidal Anti-Inflammatory Drugs"
+- "Climate Change Impact on Coastal Ecosystems"
+
+### Bad Topics:
+- "what is quantum computing"
 - "side effects of long term ibuprofen use"
-
-### Bad Queries:
-- "more details"
 - "explain better"
 
 ---

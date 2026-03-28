@@ -1,5 +1,6 @@
 from langgraph.graph import END
 from langchain_community.document_loaders import PyMuPDFLoader
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.output_parsers import PydanticOutputParser
 from .state import State
 from ..llm import light_llm, heavy_llm
@@ -25,56 +26,45 @@ async def fetch_article_content(state: State):
         all_content += doc.page_content
     
     return {
+        "abstract": result.summary,
         "all_content": all_content
     }
 
-async def semantically_split_content(state: State):
-    output_parser = PydanticOutputParser(pydantic_object=schemas.SemanticContentSplitOutputSchema)
-    chain = prompts.SEMANTICALLY_SPLIT_CONTENT_PROMPT | light_llm | output_parser
+async def split_content(state: State):
+    text_splitter = RecursiveCharacterTextSplitter()
 
-    start = 0
+    splits = text_splitter.split_text(state.all_content)
+
     content_blocks = []
-    while start < len(state.all_content):
-        content = state.all_content[start: start + config.learner_splitter_max_text_length]
-        response = await chain.ainvoke({
-            "OUTPUT_INSTRUCTIONS": output_parser.get_format_instructions(),
-            "TEXT": content
-        })
+    for s in splits:
+        start = state.all_content.index(s)
+        end = start + len(s) - 1
 
-        new_content_blocks = []
-        if len(response.indices) == 0:
-            start = len(state.all_content)
-        else:
-            base = start
-            for (s, e) in response.indices:
-                new_content_blocks.append((base + s, base + e - 1))
-                start = base + e
-        
-        content_blocks.extend(new_content_blocks)
-    
+        content_blocks.append((start ,end))
+
     return {
         "content_blocks": content_blocks
     }
 
 async def generate_embeddable_strings(state: State):
-    output_parser = PydanticOutputParser(pydantic_object=schemas.EmbeddableStringsOutputSchema)
-    chain = prompts.EMBEDDABLE_STRINGS_GENERATOR_PROMPT | heavy_llm | output_parser
+    output_parser = PydanticOutputParser(pydantic_object=schemas.ArticleDescriptionOutputSchema)
+    chain = prompts.ARTICLE_DESCRIPTION_GENERATOR_PROMPT | light_llm | output_parser
 
-    results = await chain.abatch([{
+    description = (await chain.ainvoke({
         "OUTPUT_FORMAT": output_parser.get_format_instructions(),
-        "TEXT": state.all_content[t[0]: t[1] + 1]
-    } for t in state.content_blocks])
+        "ABSTRACT": state.abstract
+    })).description
 
     all_apwes_list = []
-    for idx, res in enumerate(results):
+    for idx, (start, end) in enumerate(state.content_blocks):
         ap = ArticlePart(
             id=state.article_id,
-            start=state.content_blocks[idx][0],
-            end=state.content_blocks[idx][1]
+            start=start,
+            end=end
         )
         apwes = ArticlePartWithEmbeddableStrings(
             part=ap,
-            embeddable_strings=res.embeddable_strings
+            embeddable_strings=[description + "\n" + state.all_content[start: end + 1]]
         )
 
         all_apwes_list.append(apwes)
