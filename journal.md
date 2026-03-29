@@ -30,3 +30,10 @@ I am thinking of merging the last 2 options, creating chunks using text splitter
 Also for retreival I will use a hybrid approach, obtaining high volumne of chunks using BM25 + vector search then do cross-ranking.
 
 Let's see how it goes.
+
+## March 29, 2026
+
+Learning flow fixed, asynchronous arxiv search + multiprocessing based pdf parsing implemented. Removed redundant nodes/llm calls and streamlined the prompts. The server is pretty much completely working. Retreival quality is still pretty bad, I haven't implemented the BM25 + vector search hybrid retreival yet.
+Using only arxiv.org as exclusive source of context is hitting it's limits, there's a lot of stuff that is not on arxiv.org and querying it isn't too good (the results I mean).
+
+Gonna build the frontend for now. Fix retreival later.
