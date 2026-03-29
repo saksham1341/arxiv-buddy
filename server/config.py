@@ -16,5 +16,8 @@ class ServerConfig(BaseSettings):
     database_password: str = Field(description="Password to connect to the database.")
     database_name: str = Field(default="arxiv_buddy_kb", description="The name of the database.")
 
+    pdf_parser_pool_executor_semaphore_count: int = Field(default=10, description="Value of the process parser pool semaphore.")
+    arxiv_search_call_semaphore_count: int = Field(default=10, description="Value of the arxiv search call semaphore.")
+
 
 config = ServerConfig()  # type: ignore

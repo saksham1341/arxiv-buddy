@@ -31,7 +31,8 @@ async def message_history_coverage_checker(state: State):
 
     return {
         "is_message_history_enough": resp.is_message_history_enough,
-        "kb_queries": resp.kb_queries
+        "kb_queries": resp.kb_queries,
+        "ai_response": resp.response
     }
 
 async def kb_context_fetcher(state: State, config: RunnableConfig):
@@ -40,13 +41,12 @@ async def kb_context_fetcher(state: State, config: RunnableConfig):
 
     conversation_id = config["configurable"]["thread_id"]  # type: ignore
     kb_client = config["configurable"]["kb_client"]  # type: ignore
-    arxiv_api_client = config["configurable"]["arxiv_api_client"]  # type: ignore
-
+    
     # notify
     await config["configurable"]["notifications"]["notify_gathering_context_call"](conversation_id, state.kb_queries)  # type: ignore
 
     # gather context
-    context = await utils.get_context(kb_client=kb_client, arxiv_api_client=arxiv_api_client, q=state.kb_queries)
+    context = await utils.get_context(kb_client=kb_client, q=state.kb_queries)
 
     return {
         "kb_context": context
@@ -67,7 +67,8 @@ async def kb_context_coverage_checker(state: State):
 
     return {
         "is_kb_context_enough": resp.is_kb_context_enough,
-        "new_query_to_research": resp.new_query_to_research
+        "new_query_to_research": resp.new_query_to_research,
+        "ai_response": resp.response
     }
 
 def new_query_researcher_factory(searcher_agent, learner_agent):
@@ -76,41 +77,25 @@ def new_query_researcher_factory(searcher_agent, learner_agent):
             return
 
         conversation_id = config["configurable"]["thread_id"]  # type: ignore
-        arxiv_api_client = config["configurable"]["arxiv_api_client"]  # type: ignore
+        arxiv_search_call_semaphore = config["configurable"]["arxiv_search_call_semaphore"]  # type: ignore
         kb_client = config["configurable"]["kb_client"]  # type: ignore
+        pdf_parser_pool_executor = config["configurable"]["pdf_parser_pool_executor"]  # type: ignore
+        pdf_parser_pool_executor_semaphore = config["configurable"]["pdf_parser_pool_executor_semaphore"]  # type: ignore
         
         # notify searcher
         await config["configurable"]["notifications"]["notify_searcher_call"](conversation_id, state.new_query_to_research)  # type: ignore
 
         # get article ids to learn
-        related_articles = await utils.find_relevant_articles_to_learn(arxiv_api_client, searcher_agent, conversation_id, state.new_query_to_research)
-        article_ids = list(related_articles.keys())
+        related_articles = await utils.find_relevant_articles_to_learn(searcher_agent, arxiv_search_call_semaphore, conversation_id, state.new_query_to_research)
+        article_ids = [article["article_id"] for article in related_articles]
         
         # notify learner
         await config["configurable"]["notifications"]["notify_learner_call"](conversation_id, article_ids)  # type: ignore
 
         # learn
-        await asyncio.gather(*[utils.learn_article(kb_client, learner_agent, conversation_id, k) for k in article_ids])
+        await asyncio.gather(*[utils.learn_article(kb_client, learner_agent, pdf_parser_pool_executor, pdf_parser_pool_executor_semaphore, conversation_id, article["article_id"], article["pdf_url"], article["abstract"]) for article in related_articles])
     
     return new_query_researcher
-
-async def final_response_generator(state: State):
-    # generate the final response
-    output_parser = PydanticOutputParser(pydantic_object=schemas.FinalResponseOutput)
-    prompt = prompts.FINAL_RESPONSE_GENERATOR_PROMPT
-
-    chain = prompt | heavy_llm | output_parser
-
-    resp = await chain.ainvoke({
-        "OUTPUT_FORMAT": output_parser.get_format_instructions(),
-        "TRANSCRIPT": state.message_history,
-        "CONTEXT": state.kb_context,
-        "QUERY": state.user_message
-    })
-
-    return {
-        "ai_message": resp.response
-    }
 
 async def end_node(state: State, config: RunnableConfig):
     conversation_id = config["configurable"]["thread_id"]  # type: ignore

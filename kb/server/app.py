@@ -71,16 +71,14 @@ async def add(req: AddToKnowledgeBaseRequest):
             item_kwargs.append({
                 "article_id": pwes.part.id,
                 "start_idx": pwes.part.start,
-                "end_idx": pwes.part.end
+                "end_idx": pwes.part.end,
+                "content": pwes.part.content
             })
 
             all_embeddable_strings.append(s)
     
     # TODO: Implement asynchronous embedding by writing a custom helper function
-    all_embeddings = embedder.embed_documents(
-        texts=all_embeddable_strings,
-        batch_size=100
-    )
+    all_embeddings = await embedder(texts=all_embeddable_strings)
 
     items = [Item(
         **item_kwargs[i],
@@ -102,10 +100,7 @@ class QueryKnowledgeBaseResponse(BaseModel):
 @app.get("/query", name="Query the knowledge base", response_model=QueryKnowledgeBaseResponse)
 async def query(q: list[str] = Query()):
     # TODO: Imlement asynchronous embedding
-    query_embeddings = embedder.embed_documents(
-        texts=q,
-        batch_size=100
-    )
+    query_embeddings = await embedder(texts=q)
 
     db_res = await asyncio.gather(*[get_closest_items(engine, _, config.nearest_items_limit) for _ in query_embeddings])
     
@@ -116,7 +111,8 @@ async def query(q: list[str] = Query()):
             article_parts.append(ArticlePart(
                 id=item.article_id,
                 start=item.start_idx,
-                end=item.end_idx
+                end=item.end_idx,
+                content=item.content
             ))
         result.append(article_parts)
 

@@ -2,31 +2,39 @@ from langgraph.graph import END
 from langchain_community.document_loaders import PyMuPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.output_parsers import PydanticOutputParser
+from langchain_core.runnables import RunnableConfig
 from .state import State
 from ..llm import light_llm, heavy_llm
 from ..config import config
 from . import prompts, schemas
 from kb.core.article_part import ArticlePart, ArticlePartWithEmbeddableStrings
-import arxiv
+import asyncio
+import re
 
-async def fetch_article_content(state: State):
-    # TODO: Implement asynchronous arxiv search
-    client = arxiv.Client(
-        page_size=1,
-    )
-    search = arxiv.Search(id_list=[state.article_id])
-    
-    result = next(client.results(search=search), None)
-    if result is None or result.pdf_url is None:
-        raise RuntimeError("Failed to fetch article pdf.")
-    
-    loader = PyMuPDFLoader(file_path=str(result.pdf_url))
-    all_content = ""
-    async for doc in loader.alazy_load():
-        all_content += doc.page_content
-    
+
+def fetch_article_content_helper(url: str) -> str:
+    """
+    Target of multiprocessing which uses CPU heavy PyMuPDFLoader to read a pdf at given url.
+    """
+
+    loader = PyMuPDFLoader(file_path=str(url), mode="single")
+    all_content = loader.load()[0].page_content
+
+    return all_content
+
+async def fetch_article_content(state: State, config: RunnableConfig):
+    # use pdf_parser_pool_executor to run a separate process to fetch the content of the pdf
+    semaphore = config["configurable"]["pdf_parser_pool_executor_semaphore"]  # type: ignore
+    pool_executor = config["configurable"]["pdf_parser_pool_executor"]  # type: ignore
+    loop = asyncio.get_event_loop()
+    async with semaphore:
+        all_content = await loop.run_in_executor(pool_executor, fetch_article_content_helper, state.pdf_url)
+        
+        # clean
+        all_content = re.sub(r'[\x00-\x1F\x7F]', '', all_content)
+
     return {
-        "abstract": result.summary,
+        "abstract": state.abstract,
         "all_content": all_content
     }
 
@@ -40,7 +48,7 @@ async def split_content(state: State):
         start = state.all_content.index(s)
         end = start + len(s) - 1
 
-        content_blocks.append((start ,end))
+        content_blocks.append((start, end, s))
 
     return {
         "content_blocks": content_blocks
@@ -50,21 +58,23 @@ async def generate_embeddable_strings(state: State):
     output_parser = PydanticOutputParser(pydantic_object=schemas.ArticleDescriptionOutputSchema)
     chain = prompts.ARTICLE_DESCRIPTION_GENERATOR_PROMPT | light_llm | output_parser
 
-    description = (await chain.ainvoke({
-        "OUTPUT_FORMAT": output_parser.get_format_instructions(),
-        "ABSTRACT": state.abstract
-    })).description
+    # description = (await chain.ainvoke({
+    #     "OUTPUT_FORMAT": output_parser.get_format_instructions(),
+    #     "ABSTRACT": state.abstract
+    # })).description
+    description = ""
 
     all_apwes_list = []
-    for idx, (start, end) in enumerate(state.content_blocks):
+    for (start, end, content) in state.content_blocks:
         ap = ArticlePart(
             id=state.article_id,
             start=start,
-            end=end
+            end=end,
+            content=content
         )
         apwes = ArticlePartWithEmbeddableStrings(
             part=ap,
-            embeddable_strings=[description + "\n" + state.all_content[start: end + 1]]
+            embeddable_strings=[description + "\n" + content]
         )
 
         all_apwes_list.append(apwes)

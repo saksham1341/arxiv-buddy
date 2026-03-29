@@ -30,9 +30,10 @@ class Item(Base):
 
     idx: Mapped[int] = mapped_column(BigInteger(), autoincrement=True, primary_key=True)
     embedding: Mapped[VECTOR] = mapped_column(VECTOR(core_config.embedding_dimensionality))
-    article_id: Mapped[str] = mapped_column(String(100))
+    article_id: Mapped[str] = mapped_column(String)
     start_idx: Mapped[int] = mapped_column(BigInteger())
     end_idx: Mapped[int] = mapped_column(BigInteger())
+    content: Mapped[str] = mapped_column(String)
 
 
 async def insert_items(engine: AsyncEngine, items: list[Item]) -> None:

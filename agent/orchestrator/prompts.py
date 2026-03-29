@@ -2,75 +2,65 @@ from langchain_core.prompts import PromptTemplate
 
 
 MESSAGE_HISTORY_COVERAGE_CHECKER_PROMPT = PromptTemplate.from_template(template="""
-You are a Message History Coverage Checker and Query Generator.
+You are a Message History Coverage Checker.
 
-Your job is to determine whether the **conversation transcript alone** is sufficient to answer the user’s query. If it is not sufficient, you must generate **high-quality search queries** to retrieve relevant information from the knowledge base.
+Your task is to determine whether the conversation transcript alone is sufficient to answer the user's query.
 
 ---
 
 ## Inputs
-
 - Conversation Transcript
 - User Query
 
 ---
 
-## Your Task
+## Instructions
 
-1. Analyze the transcript and the user query
-2. Determine whether the query can be answered using ONLY the transcript
-3. If NOT, generate a list of queries to retrieve missing information from the knowledge base
-
----
-
-## Decision Criteria
-
-### Mark as SUFFICIENT if:
-- The transcript contains all necessary facts
-- The query can be answered completely without external knowledge
-- No ambiguity or missing information exists
-
-### Mark as INSUFFICIENT if:
-- Any required information is missing
-- The query depends on external knowledge
-- The transcript is incomplete or unclear
+1. Analyze the transcript and the query.
+2. Decide if the query can be fully answered using ONLY the transcript.
 
 ---
 
-## Query Generation Rules (IMPORTANT)
+## Decision Rules
 
-If INSUFFICIENT, generate a list of search queries that:
+Mark `is_message_history_enough = true` ONLY if:
+- All required information is explicitly present in the transcript
+- No external knowledge is needed
+- There is no ambiguity
 
-- Are specific and information-dense
-- Cover ALL missing aspects of the question
-- Avoid redundancy
-- Use clear keywords suitable for retrieval systems
-- Break complex questions into multiple focused queries if needed
-
-### Good Queries:
-- "causes of inflation in economics"
-- "difference between TCP and UDP protocols"
-
-### Bad Queries:
-- "tell me more"
-- "stuff about it"
+Otherwise mark it as false.
 
 ---
 
-## Output Requirements
+## If NOT sufficient
 
-You MUST return a structured response in the following format:
+Generate `kb_queries`:
+- Include all missing information needed to answer the query
+- Use specific, retrieval-friendly phrasing
+- Avoid vague or redundant queries
+- Break complex gaps into multiple queries if needed
+
+---
+
+## If sufficient
+
+- Provide the final answer in `response`
+- Set `kb_queries` to null or empty
+
+---
+
+## Constraints
+
+- Do NOT use external knowledge
+- Do NOT guess
+- Be strict — if unsure, mark as insufficient
+- Queries must directly map to missing information
+
+---
+
+## Output Format
 
 {OUTPUT_FORMAT}
-
----
-
-## Guidelines
-
-- Do NOT answer the query
-- Do NOT use external knowledge
-- Be strict: prefer INSUFFICIENT if unsure
-- Ensure queries directly map to missing information
 
 ---
 
@@ -86,143 +76,65 @@ You MUST return a structured response in the following format:
 """)
 
 KNOWLEDGE_BASE_CONTEXT_COVERAGE_CHECKER_PROMPT = PromptTemplate.from_template(template="""
-You are a Knowledge Base Context Coverage Checker and Research Topic Generator.
+You are a Knowledge Base Context Coverage Checker.
 
-Your job is to evaluate whether the provided **retrieved context** is sufficient to answer the user’s query. If it is not sufficient, you must generate the **single most important research topic** to expand the knowledge base.
+Your task is to determine whether the retrieved context is sufficient to fully answer the user's query.
 
 ---
 
 ## Inputs
-
 - User Query
 - Retrieved Context
 
 ---
 
-## Your Task
+## Instructions
 
-1. Analyze the retrieved context in relation to the user query
-2. Determine whether the context is sufficient to fully answer the query
-3. If NOT sufficient, generate ONE high-impact research topic
-
----
-
-## Decision Criteria
-
-### Mark as SUFFICIENT if:
-- All required information is present
-- The context directly supports a complete answer
-- No major gaps or ambiguities remain
-
-### Mark as INSUFFICIENT if:
-- Key details are missing
-- Context is shallow, partial, or irrelevant
-- Additional knowledge is clearly required
+1. Evaluate how well the context answers the query.
+2. Decide if the context is complete and sufficient.
 
 ---
 
-## Research Topic Rules (CRITICAL)
+## Decision Rules
 
-If INSUFFICIENT, generate EXACTLY ONE topic that:
+Mark `is_kb_context_enough = true` ONLY if:
+- The context contains all required information
+- The answer can be fully constructed without gaps
+- No major ambiguity remains
 
-- Represents a **broader subject area**, not a search-style query
-- Captures the **core missing knowledge domain**
-- Is concise but conceptually meaningful
-- Is suitable for guiding further research or knowledge base expansion
-
-### Good Topics:
-- "Quantum Computing"
-- "Long-term Effects of Nonsteroidal Anti-Inflammatory Drugs"
-- "Climate Change Impact on Coastal Ecosystems"
-
-### Bad Topics:
-- "what is quantum computing"
-- "side effects of long term ibuprofen use"
-- "explain better"
+Otherwise mark it as false.
 
 ---
 
-## Output Requirements
+## If NOT sufficient
 
-You MUST return a structured response in the following format:
+Generate `new_query_to_research`:
+- EXACTLY ONE topic
+- Must be a broad knowledge domain (not a question)
+- Should represent the core missing information
+- Keep it concise and meaningful
+
+---
+
+## If sufficient
+
+- Provide the final answer in `response`
+- Set `new_query_to_research` to null or empty
+
+---
+
+## Constraints
+
+- Do NOT answer unless sufficient
+- Do NOT hallucinate
+- Do NOT generate multiple topics
+- Prefer insufficient if unsure
+
+---
+
+## Output Format
 
 {OUTPUT_FORMAT}
-
----
-
-## Guidelines
-
-- Do NOT answer the query
-- Do NOT assume missing information
-- Be conservative: prefer INSUFFICIENT if unsure
-- Focus only on the provided context
-
----
-
-## Retrieved Context
-
-{CONTEXT}
-
----
-
-## User Query
-
-{QUERY}
-""")
-
-FINAL_RESPONSE_GENERATOR_PROMPT = PromptTemplate.from_template(template="""
-You are a Final Response Generator.
-
-Your job is to produce a complete and accurate answer to the user’s query using the provided context.
-
----
-
-## Inputs
-
-- User Query
-- Conversation Transcript (optional)
-- Retrieved Knowledge Base Context
-
----
-
-## Your Task
-
-Generate a final answer that:
-
-1. Fully addresses the user’s query
-2. Uses only the provided context
-3. Is clear, accurate, and well-structured
-
----
-
-## Rules
-
-- Do NOT use information outside the provided context
-- Do NOT hallucinate or guess
-- If the context is insufficient, clearly state that more information is needed
-- Prefer clarity and completeness over brevity
-
----
-
-## Answer Guidelines
-
-- Be direct and helpful
-- Structure the answer if needed (bullet points, steps, etc.)
-- Resolve ambiguities using available context only
-
----
-
-## Output Requirements
-
-You MUST return a structured response in the following format:
-
-{OUTPUT_FORMAT}
-
----
-
-## Conversation Transcript (if relevant)
-
-{TRANSCRIPT}
 
 ---
 

@@ -1,4 +1,6 @@
 import httpx
+import asyncio
+from .config import config
 from ..core.article_part import ArticlePart, ArticlePartWithEmbeddableStrings
 
 
@@ -12,15 +14,23 @@ class KBClient:
             return response.json()
 
     async def add(self, pwes: list[ArticlePartWithEmbeddableStrings]) -> int:
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
+        batches = []
+        start = 0
+        while start < len(pwes):
+            batches.append(pwes[start: start + config.add_batch_size])
+            start += config.add_batch_size
+
+        async with httpx.AsyncClient(timeout=60) as client:
+            tasks = [client.post(
                 url=f"{self._kb_url}/add",
                 json={
-                    "parts_with_embeddable_strings": [p.model_dump() for p in pwes]
+                    "parts_with_embeddable_strings": [p.model_dump() for p in batch]
                 }
-            )
+            ) for batch in batches]
 
-            return response.json()["count"]
+            responses = await asyncio.gather(*tasks)
+
+        return sum([res.json()["count"] if res.status_code == 200 and res.json()["success"] else 0 for res in responses])
     
     async def query(self, q: list[str]) -> list[list[ArticlePart]]:
         async with httpx.AsyncClient() as client:
@@ -44,11 +54,12 @@ class KBClient:
 
             return response.json()["is_learned"]
     
-    def create_article_part(self, id: str, start: int, end: int) -> ArticlePart:
+    def create_article_part(self, id: str, start: int, end: int, content: str) -> ArticlePart:
         return ArticlePart(
             id=id,
             start=start,
-            end=end
+            end=end,
+            content=content
         )
     
     def create_article_part_with_embeddable_strings(self, ap: ArticlePart, es: list[str]) -> ArticlePartWithEmbeddableStrings:

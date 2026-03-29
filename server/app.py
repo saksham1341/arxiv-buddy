@@ -9,6 +9,7 @@ from contextlib import asynccontextmanager
 import asyncio
 import json
 from datetime import datetime
+from concurrent.futures import ProcessPoolExecutor
 
 # agents
 from agent.learner import build_learner
@@ -16,40 +17,52 @@ from agent.searcher import build_searcher
 from agent.orchestrator import build_orchestrator
 
 
-engine = create_async_engine(db.URL.create(
-    drivername="postgresql+psycopg",
-    username=config.database_username,
-    password=config.database_password,
-    host=config.database_host,
-    port=config.database_port,
-    database=config.database_name
-))
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # instantiate required objects
+    engine = create_async_engine(db.URL.create(
+        drivername="postgresql+psycopg",
+        username=config.database_username,
+        password=config.database_password,
+        host=config.database_host,
+        port=config.database_port,
+        database=config.database_name
+    ))
+
+    kb_client = KBClient(host=config.kb_host, port=config.kb_port)
+    pdf_parser_pool_executor = ProcessPoolExecutor()
+
+    searcher = build_searcher(name="searcher_agent")
+    learner = build_learner(name="learner_agent")
+    orchestrator = build_orchestrator(name="orchestrator_agent", searcher_agent=searcher, learner_agent=learner)
+
     # prepare the database
     await db.prepare_database(engine)
 
+    # attach
+    app.state.engine = engine
+    app.state.kb_client = kb_client
+    app.state.pdf_parser_pool_executor_semaphore = asyncio.Semaphore(config.pdf_parser_pool_executor_semaphore_count)
+    app.state.arxiv_search_call_semaphore = asyncio.Semaphore(config.arxiv_search_call_semaphore_count)
+    app.state.pdf_parser_pool_executor = pdf_parser_pool_executor
+    app.state.orchestrator = orchestrator
+
     yield
 
-    # close the engine
+    # cleanup
     await engine.dispose()
+    pdf_parser_pool_executor.shutdown(wait=False)
 
 app = FastAPI(
     debug=True,
     lifespan=lifespan
 )
-kb_client = KBClient(host=config.kb_host, port=config.kb_port)
-arxiv_api_client = arxiv.Client(page_size=10)
-searcher = build_searcher()
-learner = build_learner()
-orchestrator = build_orchestrator(searcher_agent=searcher, learner_agent=learner)
 
 @app.post("/chat/{conversation_id}", response_model=schemas.SendMessageResponse)
 async def send_message_to_chat(req: schemas.SendMessageRequest, background_tasks: BackgroundTasks, conversation_id: str = Path(...)):
-    conversation_state = await db.get_conversation_state(engine, conversation_id)
+    conversation_state = await db.get_conversation_state(app.state.engine, conversation_id)
     if conversation_state is None:  # new conversation
-        await db.set_conversation_state(engine, conversation_id, db.ConversationStateEnum.free)
+        await db.set_conversation_state(app.state.engine, conversation_id, db.ConversationStateEnum.free)
     elif conversation_state == db.ConversationStateEnum.busy:  # agent already running for this conversation
         return schemas.SendMessageResponse(
             success=False,
@@ -57,7 +70,7 @@ async def send_message_to_chat(req: schemas.SendMessageRequest, background_tasks
         )
     
     # generate message history
-    conv_history = await db.get_conversation_history(engine, conversation_id)
+    conv_history = await db.get_conversation_history(app.state.engine, conversation_id)
     message_history_parts = []
     for item in conv_history:
         if item.item_type == db.ConversationItemTypes.user_message:
@@ -71,20 +84,22 @@ async def send_message_to_chat(req: schemas.SendMessageRequest, background_tasks
     # agent run
     async def run_agent_as_task():
         try:
-            await db.set_conversation_state(engine, conversation_id, db.ConversationStateEnum.busy)
-            await orchestrator.ainvoke({
+            await db.set_conversation_state(app.state.engine, conversation_id, db.ConversationStateEnum.busy)
+            await app.state.orchestrator.ainvoke({
                 "user_message": req.message,
                 "message_history": message_history
             }, config={  # type: ignore
                 "configurable": {
                     "thread_id": conversation_id,
-                    "notifications": notifications.generate_notification_functions(engine),
-                    "kb_client": kb_client,
-                    "arxiv_api_client": arxiv_api_client
+                    "notifications": notifications.generate_notification_functions(app.state.engine),
+                    "kb_client": app.state.kb_client,
+                    "pdf_parser_pool_executor_semaphore": app.state.pdf_parser_pool_executor_semaphore,
+                    "pdf_parser_pool_executor": app.state.pdf_parser_pool_executor,
+                    "arxiv_search_call_semaphore": app.state.arxiv_search_call_semaphore
                 }
             })
         finally:
-            await db.set_conversation_state(engine, conversation_id, db.ConversationStateEnum.free)
+            await db.set_conversation_state(app.state.engine, conversation_id, db.ConversationStateEnum.free)
     
     asyncio.create_task(run_agent_as_task())
 
@@ -95,7 +110,7 @@ async def send_message_to_chat(req: schemas.SendMessageRequest, background_tasks
 @app.get("/chat/{conversation_id}", response_class=EventSourceResponse)
 async def connect_to_chat(conversation_id: str = Path()):
     # first we send the complete coversation history
-    history = await db.get_conversation_history(engine, conversation_id)
+    history = await db.get_conversation_history(app.state.engine, conversation_id)
     # parse ConversationItems to dictionary
     history = [item.to_dict() for item in history]
 
@@ -104,7 +119,7 @@ async def connect_to_chat(conversation_id: str = Path()):
     # yield new entries
     last_timestamp = history[-1]["timestamp"] if history else datetime.fromtimestamp(0)
     while await asyncio.sleep(0.1, True):
-        new_items = await db.get_conversation_items_after_timestamp(engine, conversation_id, last_timestamp)
+        new_items = await db.get_conversation_items_after_timestamp(app.state.engine, conversation_id, last_timestamp)
 
         for item in new_items:
             yield item.to_dict()

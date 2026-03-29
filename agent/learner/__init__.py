@@ -4,7 +4,7 @@ from langgraph.graph import StateGraph, START, END
 from langgraph.checkpoint.memory import InMemorySaver
 
 
-def build_learner():
+def build_learner(name: str):
     builder = StateGraph(
         state_schema=State
     )
@@ -19,5 +19,6 @@ def build_learner():
     builder.add_edge("generate_embeddable_strings", END)
 
     return builder.compile(
+        name=name,
         checkpointer=InMemorySaver()
     )
