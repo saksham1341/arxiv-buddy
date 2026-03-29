@@ -10,6 +10,8 @@ class ServerConfig(BaseSettings):
     kb_host: str = Field(description="The host address of the kb server.")
     kb_port: int = Field(description="The port of the kb server.")
 
+    website_url: str = Field(default="http://localhost:5173", description="The website url to add to CORS allow list.")
+
     database_host: str = Field(default="localhost", description="The host of the database.")
     database_port: int = Field(default=5432, description="The port of the database.")
     database_username: str = Field(description="Username to connect to the database.")

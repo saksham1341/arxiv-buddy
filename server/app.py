@@ -1,6 +1,7 @@
-from fastapi import FastAPI, Path, BackgroundTasks
+from fastapi import FastAPI, Path
+from fastapi.responses import RedirectResponse
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.sse import EventSourceResponse
-import arxiv
 from kb.client import KBClient
 from .config import config
 from . import db, schemas, notifications
@@ -8,6 +9,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from contextlib import asynccontextmanager
 import asyncio
 import json
+import uuid
 from datetime import datetime
 from concurrent.futures import ProcessPoolExecutor
 
@@ -58,15 +60,47 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+origins = [
+    config.website_url,
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"]
+)
+
 @app.post("/chat/{conversation_id}", response_model=schemas.SendMessageResponse)
-async def send_message_to_chat(req: schemas.SendMessageRequest, background_tasks: BackgroundTasks, conversation_id: str = Path(...)):
+async def send_message_to_chat(req: schemas.SendMessageRequest, conversation_id: str = Path(...)):
+    if conversation_id == "new":
+        # new chat, redirect with an available conversation id
+        while True:
+            # TODO: this is not atomic so can cause problems in rare cases
+            conversation_id = str(uuid.uuid4())
+            conversation_state = await db.get_conversation_state(app.state.engine, conversation_id)
+            if conversation_state is None:
+                break
+        
+        await db.set_conversation_state(app.state.engine, conversation_id, db.ConversationStateEnum.free)
+
+        return RedirectResponse(
+            f"/chat/{conversation_id}"
+        )
+
     conversation_state = await db.get_conversation_state(app.state.engine, conversation_id)
     if conversation_state is None:  # new conversation
-        await db.set_conversation_state(app.state.engine, conversation_id, db.ConversationStateEnum.free)
+        return schemas.SendMessageResponse(
+            success=False,
+            error="Conversation not found.",
+            conversation_id=conversation_id
+        )
     elif conversation_state == db.ConversationStateEnum.busy:  # agent already running for this conversation
         return schemas.SendMessageResponse(
             success=False,
-            error="Agent is busy right now."
+            error="Agent is busy right now.",
+            conversation_id=conversation_id
         )
     
     # generate message history
@@ -104,7 +138,8 @@ async def send_message_to_chat(req: schemas.SendMessageRequest, background_tasks
     asyncio.create_task(run_agent_as_task())
 
     return schemas.SendMessageResponse(
-        success=True
+        success=True,
+        conversation_id=conversation_id
     )
 
 @app.get("/chat/{conversation_id}", response_class=EventSourceResponse)
