@@ -17,10 +17,8 @@ async def start_node(state: State, config: RunnableConfig):
     await config["configurable"]["notifications"]["notify_user_message"](conversation_id, state.user_message)  # type: ignore
 
 async def message_history_coverage_checker(state: State):
-    # check if message history is enough to answer user query
     output_parser = PydanticOutputParser(pydantic_object=schemas.MessageHistoryCoverageCheckerOutput)
     prompt = prompts.MESSAGE_HISTORY_COVERAGE_CHECKER_PROMPT
-
     chain = prompt | heavy_llm | output_parser
 
     resp = await chain.ainvoke({
@@ -29,11 +27,23 @@ async def message_history_coverage_checker(state: State):
         "QUERY": state.user_message
     })
 
-    return {
+    updates = {
+        # Query understanding
+        "is_query_complete": resp.is_query_complete,
+        "is_query_resolvable_from_history": resp.is_query_resolvable_from_history,
+        "resolved_query": resp.resolved_query,
+
+        # Coverage
         "is_message_history_enough": resp.is_message_history_enough,
+
+        # Retrieval
         "kb_queries": resp.kb_queries,
+
+        # Final response (only set when appropriate)
         "ai_response": resp.response
     }
+
+    return updates
 
 async def kb_context_fetcher(state: State, config: RunnableConfig):
     if state.is_message_history_enough or not state.kb_queries:
@@ -62,7 +72,7 @@ async def kb_context_coverage_checker(state: State):
     resp = await chain.ainvoke({
         "OUTPUT_FORMAT": output_parser.get_format_instructions(),
         "CONTEXT": state.kb_context,
-        "QUERY": state.user_message
+        "QUERY": state.resolved_query
     })
 
     return {

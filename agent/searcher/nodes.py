@@ -22,7 +22,8 @@ async def search_query_generator(state: State):
 
     resp = await chain.ainvoke(input={
         "OUTPUT_FORMAT": output_parser.get_format_instructions(),
-        "QUERY": search_intention
+        "SEARCH_INTENTION": search_intention,
+        "PAST_QUERIES": state.past_generated_search_queries
     })
 
     return {
@@ -40,18 +41,21 @@ def extract_results_from_arxiv_page(content: bytes) -> list[dict[str, str]]:
     
     articles = []
     for res in results:
-        article_id = str(res.find("div", class_="is-marginless").find("p", class_="list-title").find("a").string)  # type: ignore
-        if article_id.startswith("arXiv:"):
-            article_id = article_id[6:]
-        pdf_url = str(res.find("div", class_="is-marginless").find("p", class_="list-title").find("span").find(lambda x: x.name == "a" and str(x.string) == "pdf")["href"])  # type: ignore
-        abstract = ""
-        for tag in res.find("p", class_="abstract").find("span", class_="abstract-full").children:  # type: ignore
-            if tag.name == "a":  # type: ignore
-                continue
-            elif tag.name is None or (tag.name == "span" and "search-hit" in tag["class"]):  # type: ignore
-                abstract += tag.string  # type: ignore
-        
-        abstract = abstract.strip()
+        try:
+            article_id = str(res.find("div", class_="is-marginless").find("p", class_="list-title").find("a").string)  # type: ignore
+            if article_id.startswith("arXiv:"):
+                article_id = article_id[6:]
+            pdf_url = str(res.find("div", class_="is-marginless").find("p", class_="list-title").find("span").find(lambda x: x.name == "a" and str(x.string) == "pdf")["href"])  # type: ignore
+            abstract = ""
+            for tag in res.find("p", class_="abstract").find("span", class_="abstract-full").children:  # type: ignore
+                if tag.name == "a":  # type: ignore
+                    continue
+                elif tag.name is None or (tag.name == "span" and "search-hit" in tag["class"]):  # type: ignore
+                    abstract += tag.string  # type: ignore
+            
+            abstract = abstract.strip()
+        except:
+            continue
 
         articles.append({
             "article_id": article_id,
@@ -95,14 +99,18 @@ async def search_arxiv(semaphore: asyncio.Semaphore, q: str) -> list[dict[str, s
     return results
 
 async def fetch_articles(state: State, config: RunnableConfig):
-    resp = await asyncio.gather(*[search_arxiv(config["configurable"]["arxiv_search_call_semaphore"], q) for q in state.generated_search_queries])  # type: ignore
+    resp = await asyncio.gather(*[search_arxiv(config["configurable"]["arxiv_search_call_semaphore"], q) for q in state.generated_search_queries], return_exceptions=True)  # type: ignore
 
     fetched_articles = state.fetched_articles.copy()
-    for r in resp:
-        fetched_articles.extend(r)
+    successfully_fetched_queries = []
+    for idx, r in enumerate(resp):
+        if not isinstance(r, BaseException) and r:
+            successfully_fetched_queries.append(state.generated_search_queries[idx])
+        fetched_articles.extend(r)  # type: ignore
     
     return {
-        "fetched_articles": fetched_articles
+        "fetched_articles": fetched_articles,
+        "past_generated_search_queries": list(set(state.past_generated_search_queries + successfully_fetched_queries))
     }
 
 async def coverage_decider(state: State):

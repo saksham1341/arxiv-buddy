@@ -16,10 +16,22 @@ def build_orchestrator(name: str, searcher_agent, learner_agent):
 
     builder.add_edge(START, "start_node")
     builder.add_edge("start_node", "message_history_coverage_checker")
-    builder.add_conditional_edges("message_history_coverage_checker", (lambda state: state.is_message_history_enough), {
-        True: "end_node",
-        False: "kb_context_fetcher"
-    })
+    builder.add_conditional_edges(
+        "message_history_coverage_checker",
+        lambda state: (
+            "clarification"
+            if state.is_query_complete is False 
+            and state.is_query_resolvable_from_history is False
+            else "answer"
+            if state.is_message_history_enough is True
+            else "kb"
+        ),
+        {
+            "answer": "end_node",
+            "kb": "kb_context_fetcher",
+            "clarification": "end_node"
+        }
+    )
     builder.add_edge("kb_context_fetcher", "kb_context_coverage_checker")
     builder.add_conditional_edges("kb_context_coverage_checker", (lambda state: state.is_kb_context_enough), {
         True: "end_node",
