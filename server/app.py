@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Path
+from fastapi import FastAPI, Path, HTTPException
 from fastapi.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.sse import EventSourceResponse
@@ -143,7 +143,12 @@ async def send_message_to_chat(req: schemas.SendMessageRequest, conversation_id:
     )
 
 @app.get("/chat/{conversation_id}", response_class=EventSourceResponse)
-async def connect_to_chat(conversation_id: str = Path()):
+async def connect_to_chat(conversation_id: str = Path(...)):
+    # check if conversation exists
+    state = await db.get_conversation_state(app.state.engine, conversation_id)
+    if state is None:
+        raise HTTPException(status_code=404, detail="Conversation not found.")
+    
     # first we send the complete coversation history
     history = await db.get_conversation_history(app.state.engine, conversation_id)
     # parse ConversationItems to dictionary

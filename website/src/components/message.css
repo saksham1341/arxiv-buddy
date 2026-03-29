@@ -1,0 +1,55 @@
+div.message {
+    padding: 0px 16px;
+    border-radius: 1em;
+    margin: 5px;
+    max-width: 80%;
+}
+
+div.message.user {
+    background-color: rgb(59, 59, 59);
+    width: max-content;
+    align-self: flex-end;
+}
+
+div.message.ai {
+    align-self: flex-start;
+}
+
+span.timestamp {
+    opacity: 0.4;
+    font-size: small;
+}
+
+span.timestamp.user {
+    align-self: flex-end;
+}
+
+span.timestamp.ai {
+    align-self: flex-start;
+}
+
+div.message.activity {
+    /* border: 1px solid rgb(91, 167, 218); */
+    background-color: rgb(63, 63, 63);
+    width: max-content;
+    padding: 10px;
+    align-self: center;
+    font-size: smaller;
+}
+div.message.activity::before {
+    content: "✓";
+    margin-right: 6px;
+}
+div.message.activity.active::before {
+    content: "🛈";
+    margin-right: 6px;
+}
+
+@keyframes blink {
+  0%   { opacity: 1; }
+  50%  { opacity: 0.5; }
+}
+
+div.message.activity.active {
+  animation: blink 2s infinite;
+}

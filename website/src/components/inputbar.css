@@ -1,0 +1,55 @@
+div#inputbar-container {
+    padding: 20px 20px 25px 20px;
+    display: grid;
+}
+
+div#inputbar {
+    place-self: center;
+    width: max-content;
+    background-color: rgb(63, 63, 63);
+    padding: 10px 20px;
+    border-radius: 1em;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    font-size: 14px;
+    width: 60%;
+    box-shadow: 0px 0px 10px black;
+}
+
+div#inputbar-field {
+    outline: none;
+    padding: 5px 10px;
+}
+
+div#inputbar-field::before {
+    content: "";
+}
+
+div#inputbar-field.empty::before {
+  content: attr(data-placeholder);
+  color: #888;
+  pointer-events: none;
+  display: block;
+}
+
+button#inputbar-send {
+    background-color: white;
+    border: 0px;
+    padding: 5px 10px;
+    font-size: inherit;
+    border-radius: 1em;
+    height: max-content;
+    align-self: flex-end;
+}
+
+button#inputbar-send:hover {
+    cursor: pointer;
+}
+
+button#inputbar-send:disabled {
+    background-color: rgb(116, 116, 116);
+}
+
+button#inputbar-send:disabled:hover {
+    cursor: not-allowed;
+}
