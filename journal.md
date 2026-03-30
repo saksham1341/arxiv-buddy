@@ -37,3 +37,11 @@ Learning flow fixed, asynchronous arxiv search + multiprocessing based pdf parsi
 Using only arxiv.org as exclusive source of context is hitting it's limits, there's a lot of stuff that is not on arxiv.org and querying it isn't too good (the results I mean).
 
 Gonna build the frontend for now. Fix retreival later.
+
+## March 31, 2026
+
+Created the frontend and gave more freedom to the LLM to write answers from it's own knowledge instead of exclusive context from arxiv.org. Looking good. But I'm gonna have to add a lot more functionality to the search and retreival systems.
+Right now it's very bad because the agent can only search for topics and cannot apply any sort of filters
+for authors/publish date etc. neither in the arxiv search nor in the knowledgebase retreival call.
+
+Gonna give a lot more control to the agent for better context and thus better answers.
