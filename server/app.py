@@ -188,3 +188,15 @@ async def connect_to_chat(conversation_id: str = Path(...)):
                 }
 
         last_timestamp = new_items[-1].timestamp if new_items else last_timestamp
+
+@app.get("/list_of_conversations", response_model=schemas.ListOfConversationsResponse)
+async def list_of_conversations():
+    all_conversations = await db.get_all_conversations(app.state.engine)
+
+    return schemas.ListOfConversationsResponse(
+        conversations=[
+            schemas.ConversationItemInListOfConversations(
+                conversation_id=c.conversation_id,
+                title=c.title
+        ) for c in all_conversations]
+    )

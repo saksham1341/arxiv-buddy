@@ -3,4 +3,10 @@ div#newchatbanner {
     flex-flow: column nowrap;
     align-items: center;
     justify-content: center;
+    place-self: center;
+    width: 85%;
+}
+
+div#newchatbanner p {
+    text-align: center;
 }

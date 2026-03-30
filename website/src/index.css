@@ -12,6 +12,12 @@ body {
 
 #root {
   display: grid;
+  grid-template-columns: 23% 1fr;
+  min-height: 0;
+}
+
+#inner-root {
+  display: grid;
   grid-template-rows: auto 1fr auto;
   min-height: 0;
 }

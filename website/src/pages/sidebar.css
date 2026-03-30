@@ -1,0 +1,20 @@
+#sidebar {
+    background-color: rgb(21, 21, 21);
+    height: 100%;
+    max-width: 500px;
+    min-width: 100px;
+    padding: 25px;
+    display: flex;
+    flex-flow: column nowrap;
+}
+
+.sidebar-item {
+    overflow-x: hidden;
+    width: calc(100% - 40px);
+    padding: 15px 15px;
+    border-radius: 1em;
+}
+.sidebar-item:hover {
+    background-color: rgb(35, 35, 35);
+    cursor: pointer;
+}

@@ -76,6 +76,7 @@ async def get_conversation(engine: AsyncEngine, conversation_id: str) -> Convers
 
 async def upsert_conversation(engine: AsyncEngine, conversation_id: str, title: str | None = None, state: ConversationStates | None = None) -> None:
     conversation = await get_conversation(engine, conversation_id)
+    updates = {}
     if conversation is not None:
         updates = {
             "title": conversation.title,
@@ -117,3 +118,9 @@ async def add_conversation_item(engine: AsyncEngine, conversation_id: str, item_
     async with AsyncSession(engine) as session:
         async with session.begin():
             session.add(obj)
+
+async def get_all_conversations(engine: AsyncEngine) -> list[Conversation]:
+    async with AsyncSession(engine) as session:
+        all_conversations = await session.execute(select(Conversation))
+    
+    return [res[0] for res in all_conversations]
