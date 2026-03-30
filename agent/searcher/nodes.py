@@ -11,6 +11,14 @@ from urllib.parse import urlencode
 
 
 async def search_query_generator(state: State):
+    # Check if attempts exhausted
+    attempt_count = state.search_attempts + 1
+    if attempt_count > config.maximum_search_attempts:
+        return {
+            "search_attempts": attempt_count,
+            "attempts_exhausted": True
+        }
+
     # For the first invocation, set search_intention to the original query
     # during subsequent invocations search_intention will be preset by the coverage_decider
     search_intention = state.search_intention or state.query
@@ -27,6 +35,7 @@ async def search_query_generator(state: State):
     })
 
     return {
+        "search_attempts": attempt_count,
         "generated_search_queries": resp.queries
     }
 

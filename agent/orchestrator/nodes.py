@@ -97,6 +97,12 @@ def new_query_researcher_factory(searcher_agent, learner_agent):
 
         # get article ids to learn
         related_articles = await utils.find_relevant_articles_to_learn(searcher_agent, arxiv_search_call_semaphore, conversation_id, state.new_query_to_research)
+        if len(related_articles) == 0:
+            return {
+                "query_research_successful": False,
+                "ai_response": "I failed to find anything on Arxiv regarding your query."
+            }
+
         article_ids = [article["article_id"] for article in related_articles]
         
         # notify learner
@@ -104,6 +110,10 @@ def new_query_researcher_factory(searcher_agent, learner_agent):
 
         # learn
         await asyncio.gather(*[utils.learn_article(kb_client, learner_agent, pdf_parser_pool_executor, pdf_parser_pool_executor_semaphore, conversation_id, article["article_id"], article["pdf_url"], article["abstract"]) for article in related_articles])
+
+        return {
+            "query_research_successful": True
+        }
     
     return new_query_researcher
 

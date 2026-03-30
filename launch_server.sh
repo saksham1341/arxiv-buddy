@@ -1,1 +1,1 @@
-dotenv run -- uvicorn server.app:app --port $PORT --reload
+dotenv run -- uvicorn server.app:app --port $PORT --reload --timeout-graceful-shutdown 0

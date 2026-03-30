@@ -13,4 +13,5 @@ class State(BaseModel):
     kb_context: str | None = None
     is_kb_context_enough: bool = True
     new_query_to_research: str | None = None
+    query_research_successful: bool = True
     ai_response: str | None = None

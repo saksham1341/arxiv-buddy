@@ -37,7 +37,10 @@ def build_orchestrator(name: str, searcher_agent, learner_agent):
         True: "end_node",
         False: "new_topic_researcher"
     })
-    builder.add_edge("new_topic_researcher", "kb_context_fetcher")
+    builder.add_conditional_edges("new_topic_researcher", (lambda state: state.query_research_successful), {
+        True: "kb_context_fetcher",
+        False: "end_node"
+    })
     builder.add_edge("end_node", END)
 
     return builder.compile(
