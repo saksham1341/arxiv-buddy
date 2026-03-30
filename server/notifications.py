@@ -4,34 +4,34 @@ import json
 
 def generate_notification_functions(engine: AsyncEngine) -> dict:
     async def notify_agent_start(conversation_id: str) -> None:
-        await db.set_conversation_state(
+        await db.upsert_conversation(
             engine=engine,
             conversation_id=conversation_id,
-            state=db.ConversationStateEnum.busy
+            state=db.ConversationStates.busy
         )
 
         await db.add_conversation_item(
             engine=engine,
             conversation_id=conversation_id,
-            item_type=db.ConversationItemTypes.conversation_state_change,
+            item_type=db.ConversationItemTypes.conversation_metadata_change,
             data=json.dumps({
-                "agent_busy": True
+                "state": db.ConversationStates.busy.value
             }).encode()
         )
 
     async def notify_agent_finished(conversation_id: str) -> None:
-        await db.set_conversation_state(
+        await db.upsert_conversation(
             engine=engine,
             conversation_id=conversation_id,
-            state=db.ConversationStateEnum.free
+            state=db.ConversationStates.free
         )
 
         await db.add_conversation_item(
             engine=engine,
             conversation_id=conversation_id,
-            item_type=db.ConversationItemTypes.conversation_state_change,
+            item_type=db.ConversationItemTypes.conversation_metadata_change,
             data=json.dumps({
-                "agent_busy": False
+                "state": db.ConversationStates.free.value
             }).encode()
         )
 
@@ -84,6 +84,22 @@ def generate_notification_functions(engine: AsyncEngine) -> dict:
                 "message": message
             }).encode()
         )
+
+    async def notify_conversation_title_change(conversation_id: str, new_title: str) -> None:
+        await db.upsert_conversation(
+            engine=engine,
+            conversation_id=conversation_id,
+            title=new_title
+        )
+
+        await db.add_conversation_item(
+            engine=engine,
+            conversation_id=conversation_id,
+            item_type=db.ConversationItemTypes.conversation_metadata_change,
+            data=json.dumps({
+                "title": new_title
+            }).encode()
+        )
     
     return {
         "notify_agent_start": notify_agent_start,
@@ -92,5 +108,6 @@ def generate_notification_functions(engine: AsyncEngine) -> dict:
         "notify_searcher_call": notify_searcher_call,
         "notify_learner_call": notify_learner_call,
         "notify_gathering_context_call": notify_gathering_context_call,
-        "notify_ai_message": notify_ai_message
+        "notify_ai_message": notify_ai_message,
+        "notify_conversation_title_change": notify_conversation_title_change,
     }

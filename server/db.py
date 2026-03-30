@@ -1,5 +1,5 @@
 from sqlalchemy.orm import DeclarativeBase, mapped_column, Mapped
-from sqlalchemy import String, TIMESTAMP, Enum, LargeBinary, func, select, URL
+from sqlalchemy import String, TIMESTAMP, Enum, LargeBinary, func, select, URL, ForeignKey
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 import enum
@@ -10,19 +10,32 @@ class Base(DeclarativeBase):
     pass
 
 
+class ConversationStates(enum.Enum):
+    free = "free"
+    busy = "busy"
+
+
+class Conversation(Base):
+    __tablename__ = "conversations"
+
+    conversation_id: Mapped[str] = mapped_column(String, primary_key=True)
+    title: Mapped[str] = mapped_column(String, default="")
+    state: Mapped[ConversationStates] = mapped_column(Enum(ConversationStates))
+
+
 class ConversationItemTypes(enum.Enum):
     user_message = "user_message"
     searcher_call = "searcher_call"
     learner_call = "learner_call"
     gather_context_call = "gather_context_call"
     ai_message = "ai_message"
-    conversation_state_change = "conversation_state_change"
+    conversation_metadata_change = "conversation_metadata_change"
 
 
 class ConversationItem(Base):
     __tablename__ = "conversation_items"
 
-    conversation_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    conversation_id: Mapped[str] = mapped_column(ForeignKey("conversations.conversation_id", ondelete="CASCADE"), primary_key=True)
     timestamp: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=func.current_timestamp(), primary_key=True)
     item_type: Mapped[ConversationItemTypes] = mapped_column(Enum(ConversationItemTypes))
     data: Mapped[bytes] = mapped_column(LargeBinary)
@@ -34,18 +47,6 @@ class ConversationItem(Base):
             "item_type": self.item_type.value,
             "data": self.data
         }
-
-
-class ConversationStateEnum(enum.Enum):
-    free = "free"
-    busy = "busy"
-
-
-class ConversationState(Base):
-    __tablename__ = "conversation_states"
-
-    conversation_id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    state: Mapped[ConversationStateEnum] = mapped_column(Enum(ConversationStateEnum))
 
 
 async def get_conversation_history(engine: AsyncEngine, conversation_id: str) -> list[ConversationItem]:
@@ -64,25 +65,38 @@ async def prepare_database(engine: AsyncEngine):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-async def get_conversation_state(engine: AsyncEngine, conversation_id: str) -> ConversationStateEnum | None:
+async def get_conversation(engine: AsyncEngine, conversation_id: str) -> Conversation | None:
     async with AsyncSession(engine) as session:
-        res = (await session.execute(select(ConversationState).where(ConversationState.conversation_id == conversation_id).limit(1))).one_or_none()
+        res = (await session.execute(select(Conversation).where(Conversation.conversation_id == conversation_id).limit(1))).one_or_none()
     
     if res is None:
         return None
     
-    return res[0].state
+    return res[0]
 
-async def set_conversation_state(engine: AsyncEngine, conversation_id: str, state: ConversationStateEnum) -> None:
+async def upsert_conversation(engine: AsyncEngine, conversation_id: str, title: str | None = None, state: ConversationStates | None = None) -> None:
+    conversation = await get_conversation(engine, conversation_id)
+    if conversation is not None:
+        updates = {
+            "title": conversation.title,
+            "state": conversation.state
+        }
+    
+    if title is not None:
+        updates["title"] = title
+    if state is not None:
+        updates["state"] = state
+    
     async with AsyncSession(engine) as session:
-        stmt = insert(ConversationState).values(
+        stmt = insert(Conversation).values(
             conversation_id=conversation_id,
-            state=state
+            **updates
         )
 
         stmt = stmt.on_conflict_do_update(
-            index_elements=[ConversationState.conversation_id],
+            index_elements=[Conversation.conversation_id],
             set_={
+                "title": stmt.excluded.title,
                 "state": stmt.excluded.state
             }
         )

@@ -10,18 +10,44 @@ type ParamsType = {
     conversation_id: string;
 }
 
-type ConversationItem = {
+type ConversationMessage = {
     conversation_id: string;
     timestamp: string;
     item_type: string;
     data: string;
 }
 
+type ConversationMetadata = {
+    title: string;
+    state: string;
+}
+
 function Chat() {
     const { conversation_id } = useParams<ParamsType>();
-    const [ conversationHistory, setConversationHistory ] = useState<ConversationItem[]>([])
-    const [ isConversationBusy, setIsConversationBusy ] = useState<boolean>(true)
-    const ref = useRef<HTMLDivElement>(null);
+    const [ conversationMetadata, setConversationMetadata ] = useState<ConversationMetadata>({ title: "New Conversation", state: "busy" })
+    const [ conversationMessages, setConversationMessages ] = useState<ConversationMessage[]>([])
+    const ref = useRef<HTMLDivElement>(null)
+
+    function handleConversationMetadata(data: ConversationMetadata) {
+        // handle conversation_metadata message from SSE
+        
+        setConversationMetadata(prev => ({
+            title: data.title ?? prev.title,
+            state: data.state ?? prev.state
+        }));
+    }
+
+    function handleConversationMessage(data: ConversationMessage) {
+        // handle conversation_message message from SSE
+
+        setConversationMessages(prev => [...prev, data]);
+    }
+
+    function handleConversationHistory(data: ConversationMessage[]) {
+        // handle conversation_history message from SSE
+
+        setConversationMessages(data);
+    }
 
     useEffect(() => {
         // initiate connection to chat
@@ -29,19 +55,13 @@ function Chat() {
         const eventSource = new EventSource(`${server_url}/chat/${conversation_id}`)
 
         eventSource.onmessage = (event) => {
-            const message_data = JSON.parse(event.data);
+            const message = JSON.parse(event.data);
 
-            if (Array.isArray(message_data)) {
-                // set conversation status
-                const last_conversation_status_message = message_data.findLast(item => item.item_type === "conversation_state_change");
-                if (last_conversation_status_message) setIsConversationBusy(JSON.parse(last_conversation_status_message.data).agent_busy);
-                else setIsConversationBusy(false);
-
-                // set conversation history
-                setConversationHistory(message_data);
-            } else {
-                if (message_data.item_type === "conversation_state_change") setIsConversationBusy(JSON.parse(message_data.data).agent_busy);
-                setConversationHistory((prev) => [...prev, message_data]);
+            if (message.type == "conversation_metadata") handleConversationMetadata(message.data);
+            else if (message.type == "conversation_history") handleConversationHistory(message.data);
+            else if (message.type == "conversation_message") handleConversationMessage(message.data);
+            else {
+                console.log(`Received unkown message from server. ${message}`);
             }
         }
 
@@ -55,25 +75,29 @@ function Chat() {
     }, [conversation_id])
 
     useEffect(() => {
-        if (conversationHistory.length == 0) return;
+        document.title = conversationMetadata.title;
+    }, [conversationMetadata.title])
 
-        const latest_item = conversationHistory[conversationHistory.length - 1]
-        if (["user_message", "ai_message", "conversation_state_change"].includes(latest_item.item_type)) {
+    useEffect(() => {
+        if (conversationMessages.length == 0) return;
+
+        const latest_item = conversationMessages[conversationMessages.length - 1]
+        if (["user_message", "ai_message"].includes(latest_item.item_type)) {
             if (ref.current) ref.current.scrollTo({
-                top: ref.current?.scrollHeight,
+                top: ref.current.scrollHeight,
                 behavior: "smooth"
             });
         }
-    }, [conversationHistory])
+    }, [conversationMessages])
 
-    function parse_conversation_item_to_component(item: ConversationItem, idx: number, arr: ConversationItem[]) {
-        const item_data = JSON.parse(item.data);
+    function parseConversationMessageToComponent(message: ConversationMessage, idx: number, arr: ConversationMessage[]) {
+        const message_data = JSON.parse(message.data);
 
-        if (item.item_type == "user_message") return <UserMessage key={item.timestamp} timestamp={item.timestamp} content={item_data.message} />
-        if (item.item_type == "ai_message") return <AIMessage key={item.timestamp} timestamp={item.timestamp} content={item_data.message} />
-        if (item.item_type == "gather_context_call") return <GatherContextCallMessage key={item.timestamp} queries={item_data.q} active={idx == arr.length - 1} />
-        if (item.item_type == "searcher_call") return <SearcherCallMessage key={item.timestamp} queries={item_data.q} active={idx == arr.length - 1} />
-        if (item.item_type == "learner_call") return <LearnerCallMessage key={item.timestamp} article_ids={item_data.article_ids} active={idx == arr.length - 1} />
+        if (message.item_type == "user_message") return <UserMessage key={message.timestamp} timestamp={message.timestamp} content={message_data.message} />
+        if (message.item_type == "ai_message") return <AIMessage key={message.timestamp} timestamp={message.timestamp} content={message_data.message} />
+        if (message.item_type == "gather_context_call") return <GatherContextCallMessage key={message.timestamp} queries={message_data.q} active={idx == arr.length - 1} />
+        if (message.item_type == "searcher_call") return <SearcherCallMessage key={message.timestamp} queries={message_data.q} active={idx == arr.length - 1} />
+        if (message.item_type == "learner_call") return <LearnerCallMessage key={message.timestamp} article_ids={message_data.article_ids} active={idx == arr.length - 1} />
 
         return null;
     }
@@ -81,9 +105,9 @@ function Chat() {
     return (
         <>
         <div ref={ ref } id="chat">
-            {conversationHistory.map(parse_conversation_item_to_component).filter((item) => item != null)}
+            {conversationMessages.map(parseConversationMessageToComponent).filter((item) => item != null)}
         </div>
-        <InputBar conversation_id={ conversation_id } is_conversation_busy={ isConversationBusy } />
+        <InputBar conversation_id={ conversation_id ? conversation_id : "" } conversationMetadata ={ conversationMetadata } />
         </>
     )
 }

@@ -4,6 +4,7 @@ from pydantic import BaseModel
 class State(BaseModel):
     message_history: str
     user_message: str
+    current_conversation_title: str
     is_query_complete: bool = True
     is_query_resolvable_from_history: bool | None = None
     resolved_query: str | None = None

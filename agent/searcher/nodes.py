@@ -36,6 +36,7 @@ async def search_query_generator(state: State):
 
     return {
         "search_attempts": attempt_count,
+        "attempts_exhausted": False,
         "generated_search_queries": resp.queries
     }
 

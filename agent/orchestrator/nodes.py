@@ -16,16 +16,22 @@ async def start_node(state: State, config: RunnableConfig):
     # notify user message
     await config["configurable"]["notifications"]["notify_user_message"](conversation_id, state.user_message)  # type: ignore
 
-async def message_history_coverage_checker(state: State):
+async def message_history_coverage_checker(state: State, config: RunnableConfig):
+    conversation_id = config["configurable"]["thread_id"]  # type: ignore
     output_parser = PydanticOutputParser(pydantic_object=schemas.MessageHistoryCoverageCheckerOutput)
     prompt = prompts.MESSAGE_HISTORY_COVERAGE_CHECKER_PROMPT
     chain = prompt | heavy_llm | output_parser
 
-    resp = await chain.ainvoke({
+    resp: schemas.MessageHistoryCoverageCheckerOutput = await chain.ainvoke({
         "OUTPUT_FORMAT": output_parser.get_format_instructions(),
         "TRANSCRIPT": state.message_history,
-        "QUERY": state.user_message
+        "QUERY": state.user_message,
+        "CURRENT_CONVERSATION_TITLE": state.current_conversation_title
     })
+
+    # update conversation title change if any
+    if resp.new_conversation_title is not None:
+        await config["configurable"]["notifications"]["notify_conversation_title_change"](conversation_id, resp.new_conversation_title)  # type: ignore
 
     updates = {
         # Query understanding
@@ -40,7 +46,10 @@ async def message_history_coverage_checker(state: State):
         "kb_queries": resp.kb_queries,
 
         # Final response (only set when appropriate)
-        "ai_response": resp.response
+        "ai_response": resp.response,
+
+        # New conversation title
+        "current_conversation_title": resp.new_conversation_title if resp.new_conversation_title is not None else state.current_conversation_title
     }
 
     return updates

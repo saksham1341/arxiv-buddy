@@ -73,7 +73,7 @@ type SearcherCallMessageProps = {
 function SearcherCallMessage({ queries, active }: SearcherCallMessageProps) {
     return (
         <div className={ "message activity searching" + (active ? " active" : "")}>
-            { (active ? "Searching for articles." : "Searched for articles.") + ` (${queries.length} Queries)` }
+            { (active ? "Searching for articles." : "Searched for articles.") + ` (Query: ${queries})` }
         </div>
     )
 }

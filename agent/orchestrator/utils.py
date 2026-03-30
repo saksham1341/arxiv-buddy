@@ -10,6 +10,8 @@ from concurrent.futures import ProcessPoolExecutor
 async def find_relevant_articles_to_learn(searcher_agent: CompiledStateGraph, arxiv_search_call_semaphore: asyncio.Semaphore, conversation_id: str, q: str) -> list[dict[str, str]]:
     search_results = (await searcher_agent.ainvoke({
         "query": q,  # type: ignore
+        "search_attempts": 0,
+        "attempts_exhausted": False
     }, config={
         "configurable": {
             "thread_id": conversation_id,

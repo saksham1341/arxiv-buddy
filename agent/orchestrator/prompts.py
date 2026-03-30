@@ -16,6 +16,7 @@ Your task is to:
 ## Inputs
 - Conversation Transcript
 - User Query
+- Current Conversation Title
 
 ---
 
@@ -60,6 +61,13 @@ Mark `is_message_history_enough = true` ONLY if:
 Otherwise mark it as false.
 
 ---
+
+## Step 4: Conversation Title Relevancy
+
+If the query is succesfully resolved, check if the current conversation title represents the query.
+
+If NOT:
+- Generate a short `new_conversation_title` with maximum length of 5 words whih represents the resolved query.
 
 ## Step 5: Produce Output
 
@@ -121,7 +129,14 @@ Return:
 
 ## User Query
 
-{QUERY}""")
+{QUERY}
+                                                                       
+---
+
+## Current Conversation Title
+
+{CURRENT_CONVERSATION_TITLE}
+""")
 
 KNOWLEDGE_BASE_CONTEXT_COVERAGE_CHECKER_PROMPT = PromptTemplate.from_template(template="""
 You are a Knowledge Base Context Coverage Checker.

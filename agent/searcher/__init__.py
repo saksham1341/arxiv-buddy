@@ -12,7 +12,10 @@ def build_searcher(name: str):
     builder.add_node("coverage_decider", nodes.coverage_decider)
 
     builder.add_edge(START, "search_query_generator")
-    builder.add_edge("search_query_generator", "fetch_articles")
+    builder.add_conditional_edges("search_query_generator", (lambda state: state.attempts_exhausted), {
+        True: END,
+        False: "fetch_articles"
+    })
     builder.add_edge("fetch_articles", "coverage_decider")
     builder.add_conditional_edges("coverage_decider", nodes.should_continue_searching, {
         True: "search_query_generator",

@@ -4,15 +4,15 @@ import { useNavigate } from 'react-router-dom';
 
 type InputBarProps = {
     conversation_id: string;
-    is_conversation_busy: boolean;
+    conversationMetadata: any;
 }
 
-function InputBar({ conversation_id, is_conversation_busy }: InputBarProps) {
+function InputBar({ conversation_id, conversationMetadata }: InputBarProps) {
     const [classes, setClasses] = useState("empty");
     const ref = useRef<HTMLDivElement>(null);
     const navigator = useNavigate();
 
-    async function on_inputbar_value_change(e) {
+    function on_inputbar_value_change(e) {
         const content: string = e.currentTarget.textContent ?? "";
         const trimmed_content = content.trim();
         if (trimmed_content === "") {
@@ -85,7 +85,7 @@ function InputBar({ conversation_id, is_conversation_busy }: InputBarProps) {
                     onInput={on_inputbar_value_change}
                     onKeyDown={on_key_down}
                 />
-                <button id="inputbar-send" onClick={on_submit} disabled={ is_conversation_busy ? true : false }>
+                <button id="inputbar-send" onClick={on_submit} disabled={ conversationMetadata?.state == "busy" }>
                     Send
                 </button>
             </div>
