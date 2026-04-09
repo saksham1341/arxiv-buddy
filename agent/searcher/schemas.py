@@ -59,11 +59,11 @@ class SearchQueryPlan(BaseModel):
             "q_finance",
             "statistics",
         ]
-    ] = Field(default_factory=list)
+    ] = Field(default_factory=list, description="Classification of the search. Don't include any physics subarchive in this, use the physics_archive for that.")
 
     physics_archive: Optional[str] = Field(
         default=None,
-        description="Optional physics subarchive such as astro-ph or quant-ph."
+        description="Optional physics subarchive such as astro-ph or quant-ph. These should not be added to `classifications`."
     )
 
     date_filter_by: Literal[
@@ -80,12 +80,6 @@ class SearchQueryPlan(BaseModel):
 
 class SearchQueryGeneratorOutput(BaseModel):
     queries: list[SearchQueryPlan]
-
-
-class RelevantFilterOutput(BaseModel):
-    relevant_article_ids: list[str] = Field(
-        description="A list of relevant article ids as determined by the LLM."
-    )
 
 
 class CoverageDeciderOutput(BaseModel):

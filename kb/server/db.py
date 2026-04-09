@@ -6,6 +6,7 @@ from sqlalchemy.orm import (
 from sqlalchemy import (
     BigInteger,
     String,
+    DateTime,
     select,
     func,
     text
@@ -18,6 +19,7 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.engine import URL
 from pgvector.sqlalchemy import VECTOR
 from typing import Type
+from datetime import datetime
 from ..core.config import config as core_config
 
 
@@ -33,6 +35,8 @@ class Item(Base):
     article_id: Mapped[str] = mapped_column(String)
     start_idx: Mapped[int] = mapped_column(BigInteger())
     end_idx: Mapped[int] = mapped_column(BigInteger())
+    publish_date: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    authors: Mapped[str] = mapped_column(String())
     content: Mapped[str] = mapped_column(String)
 
 

@@ -43,7 +43,6 @@ async def fetch_article_content(state: State, config: RunnableConfig):
         all_content = all_content.strip()
 
     return {
-        "abstract": state.abstract,
         "all_content": all_content
     }
 
@@ -57,7 +56,7 @@ async def split_content(state: State):
         start = state.all_content.index(s)
         end = start + len(s) - 1
 
-        content_blocks.append((start, end, s))
+        content_blocks.append((start, end, s, state.publish_date, state.authors))
 
     return {
         "content_blocks": content_blocks
@@ -74,11 +73,13 @@ async def generate_embeddable_strings(state: State):
     description = ""
 
     all_apwes_list = []
-    for (start, end, content) in state.content_blocks:
+    for (start, end, content, publish_date, authors) in state.content_blocks:
         ap = ArticlePart(
             id=state.article_id,
             start=start,
             end=end,
+            publish_date=publish_date,
+            authors=authors,
             content=content
         )
         apwes = ArticlePartWithEmbeddableStrings(

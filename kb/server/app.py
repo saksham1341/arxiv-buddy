@@ -54,7 +54,7 @@ async def index():
 
 
 class AddToKnowledgeBaseRequest(BaseModel):
-    parts_with_embeddable_strings: list[ArticlePartWithEmbeddableStrings] = Field(description="A list of article parts with embeddable strings to add to the database.")
+    parts_with_embeddable_strings: list[ArticlePartWithEmbeddableStrings] = Field(description="A list of article parts with embeddable strings to add to the database.", )
 
 
 class AddToKnowledgeBaseResponse(BaseModel):
@@ -72,6 +72,8 @@ async def add(req: AddToKnowledgeBaseRequest):
                 "article_id": pwes.part.id,
                 "start_idx": pwes.part.start,
                 "end_idx": pwes.part.end,
+                "publish_date": pwes.part.publish_date,
+                "authors": ";".join(pwes.part.authors),
                 "content": pwes.part.content
             })
 
@@ -107,7 +109,7 @@ async def query(q: list[str] = Query(), ids: list[str] = Query(default_factory=l
     for item_list in db_res:
         combined_items_with_distances.extend(item_list)
     
-    sorted_combined_items = sorted(combined_items_with_distances, key=lambda x: x[1])
+    sorted_combined_items: list[tuple[Item, float]] = sorted(combined_items_with_distances, key=lambda x: x[1])
 
     result = []
     for item, _ in sorted_combined_items:
@@ -115,6 +117,8 @@ async def query(q: list[str] = Query(), ids: list[str] = Query(default_factory=l
             id=item.article_id,
             start=item.start_idx,
             end=item.end_idx,
+            publish_date=item.publish_date,
+            authors=item.authors.split(";"),
             content=item.content
         ))
 

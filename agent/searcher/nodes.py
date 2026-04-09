@@ -1,4 +1,4 @@
-from .state import State
+from .state import State, FetchedArticle
 from . import prompts, schemas
 from langchain_core.output_parsers import PydanticOutputParser
 from langchain_core.runnables import RunnableConfig
@@ -9,6 +9,8 @@ from bs4 import BeautifulSoup
 import httpx
 from urllib.parse import urlencode
 import json
+from datetime import datetime
+import re
 
 
 async def search_query_generator(state: State):
@@ -52,7 +54,7 @@ async def search_query_generator(state: State):
         "generated_search_queries": resp.queries
     }
 
-def extract_results_from_arxiv_page(content: bytes) -> list[dict[str, str]]:
+def extract_results_from_arxiv_page(content: bytes) -> list[FetchedArticle]:
     # use beautifulsoup to extract results
     soup = BeautifulSoup(content, "html.parser")
 
@@ -74,21 +76,29 @@ def extract_results_from_arxiv_page(content: bytes) -> list[dict[str, str]]:
                     continue
                 elif tag.name is None or (tag.name == "span" and "search-hit" in tag["class"]):  # type: ignore
                     abstract += tag.string  # type: ignore
-            
             abstract = abstract.strip()
+            authors = [_.string for _ in res.find("p", class_="authors").find_all("a") if _.string is not None]  # type: ignore
+            publish_date_tag = soup.find(
+                "p",
+                class_="is-size-7"
+            )
+            match = re.search(r"Submitted\s+([0-9]{1,2}\s+\w+,\s+\d{4})", publish_date_tag.get_text(" ", strip=True))  # type: ignore
+            publish_date = datetime.strptime(match.group(1), "%d %B, %Y")  # type: ignore
         except:
             continue
 
-        articles.append({
-            "article_id": article_id,
-            "pdf_url": pdf_url,
-            "abstract": abstract
-        })
+        articles.append(FetchedArticle(
+            article_id=article_id,
+            pdf_url=pdf_url,
+            abstract=abstract,
+            authors=authors,
+            publish_date=publish_date
+        ))
     
     return articles
 
 # not a node, a helper function
-async def search_arxiv(semaphore: asyncio.Semaphore, query_plan: schemas.SearchQueryPlan) -> list[dict[str, str]]:
+async def search_arxiv(semaphore: asyncio.Semaphore, query_plan: schemas.SearchQueryPlan) -> list[FetchedArticle]:
 
     async with httpx.AsyncClient() as client:
         base_url = "https://arxiv.org/search/advanced"
@@ -193,7 +203,7 @@ async def coverage_decider(state: State):
     resp = await chain.ainvoke(input={
         "OUTPUT_FORMAT": output_parser.get_format_instructions(),
         "QUERY": state.query,
-        "ARTICLES": {article["article_id"]: article["abstract"] for article in state.fetched_articles}
+        "ARTICLES": ("=" * 50 + "\n").join([article.model_dump_json() for article in state.fetched_articles])
     })
 
     if resp.coverage_fulfilled:

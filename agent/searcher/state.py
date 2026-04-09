@@ -1,5 +1,14 @@
 from pydantic import BaseModel, Field
 from . import schemas
+from  datetime import datetime
+
+
+class FetchedArticle(BaseModel):
+    article_id: str
+    pdf_url: str
+    abstract: str
+    authors: list[str]
+    publish_date: datetime
 
 
 class State(BaseModel):
@@ -16,8 +25,6 @@ class State(BaseModel):
         default_factory=list
     )
 
-    fetched_articles: list[dict[str, str]] = Field(
+    fetched_articles: list[FetchedArticle] = Field(
         default_factory=list
     )
-
-    current_search_results_count: int = 0

@@ -111,13 +111,13 @@ def new_query_researcher_factory(searcher_agent, learner_agent):
                 "ai_response": "I failed to find anything on Arxiv regarding your query."
             }
 
-        article_ids = [article["article_id"] for article in related_articles]
+        article_ids = [article.article_id for article in related_articles]
         
         # notify learner
         await config["configurable"]["notifications"]["notify_learner_call"](conversation_id, article_ids)  # type: ignore
 
         # learn
-        await asyncio.gather(*[utils.learn_article(kb_client, learner_agent, pdf_parser_pool_executor, pdf_parser_pool_executor_semaphore, conversation_id, article["article_id"], article["pdf_url"], article["abstract"]) for article in related_articles])
+        await asyncio.gather(*[utils.learn_article(kb_client, learner_agent, pdf_parser_pool_executor, pdf_parser_pool_executor_semaphore, conversation_id, article) for article in related_articles])
 
         return {
             "query_research_successful": True,
