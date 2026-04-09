@@ -13,8 +13,13 @@
     width: calc(100% - 40px);
     padding: 15px 15px;
     border-radius: 1em;
+    margin-bottom: 5px;
 }
 .sidebar-item:hover {
     background-color: rgb(35, 35, 35);
     cursor: pointer;
+}
+
+.sidebar-item.current {
+    background-color: rgb(35, 35, 35);
 }
