@@ -45,3 +45,10 @@ Right now it's very bad because the agent can only search for topics and cannot 
 for authors/publish date etc. neither in the arxiv search nor in the knowledgebase retreival call.
 
 Gonna give a lot more control to the agent for better context and thus better answers.
+
+
+## April 9, 2026
+
+Added a lot more control over arxiv search for the agent, working fine. Added timeout to pdf fetching.
+Need to make changes to knowledge base search to mirror arxiv search or something like that.
+ 
