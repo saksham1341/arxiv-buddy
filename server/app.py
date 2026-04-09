@@ -148,7 +148,11 @@ async def connect_to_chat(conversation_id: str = Path(...)):
     # check if conversation exists
     conversation = await db.get_conversation(app.state.engine, conversation_id)
     if conversation is None:
-        raise HTTPException(status_code=404, detail="Conversation not found.")
+        yield {
+            "type": "conversation_not_found"
+        }
+
+        return
     
     yield {
         "type": "conversation_metadata",

@@ -14,7 +14,10 @@ def build_learner(name: str):
     builder.add_node("generate_embeddable_strings", generate_embeddable_strings)
 
     builder.add_edge(START, "fetch_article_content")
-    builder.add_edge("fetch_article_content", "split_article_content")
+    builder.add_conditional_edges("fetch_article_content", (lambda state: state.all_content == ""), {
+        True: END,
+        False: "split_article_content"
+    })
     builder.add_edge("split_article_content", "generate_embeddable_strings")
     builder.add_edge("generate_embeddable_strings", END)
 

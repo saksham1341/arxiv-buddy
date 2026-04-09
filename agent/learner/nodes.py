@@ -17,9 +17,12 @@ def fetch_article_content_helper(url: str) -> str:
     Target of multiprocessing which uses CPU heavy PyMuPDFLoader to read a pdf at given url.
     """
 
-    loader = PyMuPDFLoader(file_path=str(url), mode="single")
-    all_content = loader.load()[0].page_content
-
+    try:
+        loader = PyMuPDFLoader(file_path=str(url), mode="single")
+        all_content = loader.load()[0].page_content
+    except BaseException:
+        all_content = ""
+    
     return all_content
 
 async def fetch_article_content(state: State, config: RunnableConfig):
@@ -28,10 +31,16 @@ async def fetch_article_content(state: State, config: RunnableConfig):
     pool_executor = config["configurable"]["pdf_parser_pool_executor"]  # type: ignore
     loop = asyncio.get_event_loop()
     async with semaphore:
-        all_content = await loop.run_in_executor(pool_executor, fetch_article_content_helper, state.pdf_url)
+        # skip fetching (it will continue in bg though) after 60 seconds.
+        try:
+            async with asyncio.timeout(60):
+                all_content = await loop.run_in_executor(pool_executor, fetch_article_content_helper, state.pdf_url)
+        except asyncio.TimeoutError:
+            all_content = ""
         
         # clean
         all_content = re.sub(r'[\x00-\x1F\x7F]', '', all_content)
+        all_content = all_content.strip()
 
     return {
         "abstract": state.abstract,

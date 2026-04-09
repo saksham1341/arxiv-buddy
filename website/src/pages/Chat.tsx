@@ -1,4 +1,4 @@
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { useEffect, useState, } from "react";
 import { UserMessage, AIMessage, GatherContextCallMessage, SearcherCallMessage, LearnerCallMessage } from "../components/Message";
 import InputBar from "../components/InputBar";
@@ -23,6 +23,7 @@ type ConversationMetadata = {
 }
 
 function Chat() {
+    const navigate = useNavigate();
     const { conversation_id } = useParams<ParamsType>();
     const [ conversationMetadata, setConversationMetadata ] = useState<ConversationMetadata>({ title: "New Conversation", state: "busy" })
     const [ conversationMessages, setConversationMessages ] = useState<ConversationMessage[]>([])
@@ -52,12 +53,15 @@ function Chat() {
     useEffect(() => {
         // initiate connection to chat
         const server_url = import.meta.env.VITE_API_URL;
-        const eventSource = new EventSource(`${server_url}/chat/${conversation_id}`)
+        const chat_url = `${server_url}/chat/${conversation_id}`;
+
+        const eventSource = new EventSource(chat_url);
 
         eventSource.onmessage = (event) => {
             const message = JSON.parse(event.data);
 
-            if (message.type == "conversation_metadata") handleConversationMetadata(message.data);
+            if (message.type == "conversation_not_found") navigate("/");
+            else if (message.type == "conversation_metadata") handleConversationMetadata(message.data);
             else if (message.type == "conversation_history") handleConversationHistory(message.data);
             else if (message.type == "conversation_message") handleConversationMessage(message.data);
             else {

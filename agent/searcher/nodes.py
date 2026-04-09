@@ -8,6 +8,7 @@ import asyncio
 from bs4 import BeautifulSoup
 import httpx
 from urllib.parse import urlencode
+import json
 
 
 async def search_query_generator(state: State):
@@ -19,21 +20,32 @@ async def search_query_generator(state: State):
             "attempts_exhausted": True
         }
 
-    # For the first invocation, set search_intention to the original query
-    # during subsequent invocations search_intention will be preset by the coverage_decider
+    # First invocation uses original query
     search_intention = state.search_intention or state.query
 
     prompt = prompts.SEARCH_QUERY_GENERATOR_PROMPT
-    output_parser = PydanticOutputParser(pydantic_object=schemas.SearchQueryGeneratorOutput)
+    output_parser = PydanticOutputParser(
+        pydantic_object=schemas.SearchQueryGeneratorOutput
+    )
 
     chain = prompt | light_llm | output_parser
+
+    # Serialize previous structured query plans
+    past_queries_serialized = json.dumps(
+        [
+            q.model_dump()
+            for q in state.past_generated_search_queries
+        ],
+        indent=2
+    )
 
     resp = await chain.ainvoke(input={
         "OUTPUT_FORMAT": output_parser.get_format_instructions(),
         "SEARCH_INTENTION": search_intention,
-        "PAST_QUERIES": state.past_generated_search_queries
+        "PAST_QUERIES": past_queries_serialized
     })
 
+    # IMPORTANT: do NOT update history here
     return {
         "search_attempts": attempt_count,
         "attempts_exhausted": False,
@@ -42,7 +54,7 @@ async def search_query_generator(state: State):
 
 def extract_results_from_arxiv_page(content: bytes) -> list[dict[str, str]]:
     # use beautifulsoup to extract results
-    soup = BeautifulSoup(content)
+    soup = BeautifulSoup(content, "html.parser")
 
     try:
         results = soup.body.main.find("div", class_="content").ol.find_all("li", class_="arxiv-result")  # type: ignore
@@ -76,51 +88,100 @@ def extract_results_from_arxiv_page(content: bytes) -> list[dict[str, str]]:
     return articles
 
 # not a node, a helper function
-async def search_arxiv(semaphore: asyncio.Semaphore, q: str) -> list[dict[str, str]]:
-    """
-    Search arxiv for a query.
+async def search_arxiv(semaphore: asyncio.Semaphore, query_plan: schemas.SearchQueryPlan) -> list[dict[str, str]]:
 
-    Args:
-        semaphore (asyncio.Semaphore): A semaphore to control arxiv http call.
-        q (str): The query to search arxiv for.
-    
-    Returns:
-        list[dict[str, str]]: A list of objects containing resulting articles.
-    """
+    async with httpx.AsyncClient() as client:
+        base_url = "https://arxiv.org/search/advanced"
 
-    async with httpx.AsyncClient() as client:  # type: ignore
-        base_url = "https://arxiv.org/search/"
-        params = urlencode({
-            "query": q,
-            "searchtype": "all",
-            "source": "header",
+        params = {
+            "advanced": "1",
+            "abstracts": "show",
             "size": 25,
-            "abstracts": "show"
-        })
+            "order": "-announced_date_first",
+            "classification-include_cross_list": "include",
+        }
+
+        for i, term in enumerate(query_plan.terms):
+            params[f"terms-{i}-operator"] = term.operator
+            params[f"terms-{i}-term"] = term.atom
+            params[f"terms-{i}-field"] = term.field
+
+        for cls in query_plan.classifications:
+            params[f"classification-{cls}"] = "y"
+
+        if query_plan.physics_archive:
+            params["classification-physics_archives"] = query_plan.physics_archive
+
+        params["date-filter_by"] = query_plan.date_filter_by
+
+        if query_plan.date_year:
+            params["date-year"] = query_plan.date_year
+
+        if query_plan.from_date:
+            params["date-from_date"] = query_plan.from_date
+
+        if query_plan.to_date:
+            params["date-to_date"] = query_plan.to_date
+
+        url = f"{base_url}?{urlencode(params)}"
 
         async with semaphore:
-            search_response = await client.get(f"{base_url}?{params}", timeout = 600)  # type: ignore
+            response = await client.get(url, timeout=600)
 
-        if search_response.status_code != 200:
+        if response.status_code != 200:
             return []
-        
-    results = extract_results_from_arxiv_page(search_response.content)[:config.arxiv_search_article_count]
-    
+
+    results = extract_results_from_arxiv_page(
+        response.content
+    )[:config.arxiv_search_article_count]
+
     return results
 
 async def fetch_articles(state: State, config: RunnableConfig):
-    resp = await asyncio.gather(*[search_arxiv(config["configurable"]["arxiv_search_call_semaphore"], q) for q in state.generated_search_queries], return_exceptions=True)  # type: ignore
+    resp = await asyncio.gather(
+        *[
+            search_arxiv(
+                config["configurable"]["arxiv_search_call_semaphore"],  # type: ignore
+                q
+            )
+            for q in state.generated_search_queries
+        ],
+        return_exceptions=True
+    )
 
     fetched_articles = state.fetched_articles.copy()
     successfully_fetched_queries = []
-    for idx, r in enumerate(resp):
-        if not isinstance(r, BaseException) and r:
-            successfully_fetched_queries.append(state.generated_search_queries[idx])
-        fetched_articles.extend(r)  # type: ignore
-    
+
+    for idx, result in enumerate(resp):
+        if isinstance(result, BaseException):
+            continue
+
+        if result:
+            successfully_fetched_queries.append(
+                state.generated_search_queries[idx]
+            )
+
+            fetched_articles.extend(result)
+
+    # Proper structural dedup while preserving order
+    combined_queries = (
+        state.past_generated_search_queries
+        + successfully_fetched_queries
+    )
+
+    seen = set()
+    deduped_queries = []
+
+    for query in combined_queries:
+        key = json.dumps(query.model_dump(), sort_keys=True)
+
+        if key not in seen:
+            seen.add(key)
+            deduped_queries.append(query)
+
     return {
         "fetched_articles": fetched_articles,
-        "past_generated_search_queries": list(set(state.past_generated_search_queries + successfully_fetched_queries))
+        "past_generated_search_queries": deduped_queries
     }
 
 async def coverage_decider(state: State):
