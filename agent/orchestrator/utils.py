@@ -14,7 +14,6 @@ async def find_relevant_articles_to_learn(searcher_agent: CompiledStateGraph, ar
         "search_attempts": 0,
         "attempts_exhausted": False,
         "search_intent": None,
-        "past_generated_search_queries": [],
         "generated_search_queries": [],
         "fetched_articles": [],
     }, config={
