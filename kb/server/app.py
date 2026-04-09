@@ -94,27 +94,29 @@ async def add(req: AddToKnowledgeBaseRequest):
 
 
 class QueryKnowledgeBaseResponse(BaseModel):
-    parts: list[list[ArticlePart]] = Field(description="A list of article parts matching the requested queries.")
+    parts: list[ArticlePart] = Field(description="A list of article parts matching the requested queries.")
 
 
 @app.get("/query", name="Query the knowledge base", response_model=QueryKnowledgeBaseResponse)
-async def query(q: list[str] = Query()):
+async def query(q: list[str] = Query(), ids: list[str] = Query(default_factory=list)):
     # TODO: Imlement asynchronous embedding
     query_embeddings = await embedder(texts=q)
 
-    db_res = await asyncio.gather(*[get_closest_items(engine, _, config.nearest_items_limit) for _ in query_embeddings])
-    
-    result = []
+    db_res = await asyncio.gather(*[get_closest_items(engine, _, ids, config.nearest_items_limit) for _ in query_embeddings])
+    combined_items_with_distances = []
     for item_list in db_res:
-        article_parts = []
-        for item in item_list:
-            article_parts.append(ArticlePart(
-                id=item.article_id,
-                start=item.start_idx,
-                end=item.end_idx,
-                content=item.content
-            ))
-        result.append(article_parts)
+        combined_items_with_distances.extend(item_list)
+    
+    sorted_combined_items = sorted(combined_items_with_distances, key=lambda x: x[1])
+
+    result = []
+    for item, _ in sorted_combined_items:
+        result.append(ArticlePart(
+            id=item.article_id,
+            start=item.start_idx,
+            end=item.end_idx,
+            content=item.content
+        ))
 
     return QueryKnowledgeBaseResponse(
         parts=result

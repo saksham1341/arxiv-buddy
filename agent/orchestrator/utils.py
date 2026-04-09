@@ -38,7 +38,7 @@ async def learn_article(kb_client: KBClient, learner_agent: CompiledStateGraph, 
             "pdf_parser_pool_executor_semaphore": pdf_parser_pool_executor_semaphore,
             "pdf_parser_pool_executor": pdf_parser_pool_executor
         }
-    }))["article_parts_with_embeddable_strings"]
+    })).get("article_parts_with_embeddable_strings", [])
 
     await kb_client.add(apwes)
 
@@ -49,9 +49,9 @@ async def generate_context_from_article_parts(aps: list[ArticlePart]) -> str:
     
     return context
 
-async def get_context(kb_client: KBClient, q: list[str]) -> str:
-    aps_list = await kb_client.query(q)
+async def get_context(kb_client: KBClient, q: list[str], ids: list[str]) -> str:
+    aps = await kb_client.query(q, ids)
 
-    full_context = "\n".join(await asyncio.gather(*[generate_context_from_article_parts(aps) for aps in aps_list]))
+    full_context = await generate_context_from_article_parts(aps)
 
     return full_context

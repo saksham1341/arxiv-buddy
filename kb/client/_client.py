@@ -32,7 +32,7 @@ class KBClient:
 
         return sum([res.json()["count"] if res.status_code == 200 and res.json()["success"] else 0 for res in responses])
     
-    async def query(self, q: list[str]) -> list[list[ArticlePart]]:
+    async def query(self, q: list[str], ids: list[str]) -> list[ArticlePart]:
         async with httpx.AsyncClient() as client:
             response = await client.get(
                 url=f"{self._kb_url}/query",
@@ -41,7 +41,7 @@ class KBClient:
                 }
             )
 
-            return [[self.create_article_part(**part) for part in part_list] for part_list in response.json()["parts"]]
+            return [self.create_article_part(**part) for part in response.json()["parts"]]
     
     async def is_learned(self, article_id: str) -> bool:
         async with httpx.AsyncClient() as client:

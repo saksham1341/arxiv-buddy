@@ -24,16 +24,18 @@ def build_orchestrator(name: str, searcher_agent, learner_agent):
             and state.is_query_resolvable_from_history is False
             else "answer"
             if state.is_message_history_enough is True
+            else "forced_research" if state.force_new_research is True
             else "kb"
         ),
         {
             "answer": "end_node",
             "kb": "kb_context_fetcher",
+            "forced_research": "new_topic_researcher",
             "clarification": "end_node"
         }
     )
     builder.add_edge("kb_context_fetcher", "kb_context_coverage_checker")
-    builder.add_conditional_edges("kb_context_coverage_checker", (lambda state: state.is_kb_context_enough), {
+    builder.add_conditional_edges("kb_context_coverage_checker", (lambda state: state.is_kb_context_enough ), {
         True: "end_node",
         False: "new_topic_researcher"
     })

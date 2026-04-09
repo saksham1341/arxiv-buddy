@@ -2,14 +2,20 @@ from langchain_core.prompts import PromptTemplate
 
 
 MESSAGE_HISTORY_COVERAGE_CHECKER_PROMPT = PromptTemplate.from_template(template="""
-You are a Message History Coverage Checker + Query Completeness Analyzer.
+You are a Message History Coverage Checker + Query Completeness Analyzer + Research Intent Detector.
 
 Your task is to:
 1. Determine whether the user query is complete on its own
 2. If not, attempt to resolve it using the conversation transcript
-3. Decide whether the transcript + your built-in knowledge are sufficient to answer the query
-4. Generate a user intent string
-5. Produce either a final answer, KB queries, or a clarification request
+3. Detect whether the user explicitly requires NEW research retrieval (for example from arxiv)
+4. Decide whether the transcript + your built-in knowledge are sufficient to answer the query
+5. Generate either:
+   - a casual response if the user's not asking a question
+   - a final answer
+   - KB retrieval queries
+   - a clarification request
+   - a forced new research query
+6. Decide whether the conversation title should be updated
 
 ---
 
@@ -24,110 +30,237 @@ Your task is to:
 
 Determine whether the user query is self-contained and understandable WITHOUT prior context.
 
-Mark:
-- `is_query_complete = true` if the query is clear and specific on its own
-- `is_query_complete = false` if it depends on prior context (e.g., "explain it", "summarize that", "what about this?")
+Set:
+
+- `is_query_complete = true`
+  if the query is clear and specific on its own
+
+- `is_query_complete = false`
+  if it depends on prior context
+
+Examples of incomplete queries:
+- "explain it"
+- "summarize that"
+- "what about this?"
+- "can you expand on that?"
 
 ---
 
 ## Step 2: Resolve Incomplete Queries
 
 If `is_query_complete = true`:
-1. Create `resolved_query` (a refined and fully specified version of user's query)
-2. Go to step 3
+
+- Set `resolved_query` as a refined, fully specified version of the user's query
+- Set `is_query_resolvable_from_history = null`
+- Proceed to Step 3
 
 If `is_query_complete = false`:
 
-1. Attempt to infer the missing context using the conversation transcript
-2. If the intent can be clearly reconstructed:
-   - Create `resolved_query` (a fully specified version of the query)
-   - Mark `is_query_resolvable_from_history = true`
-3. If NOT:
-   - Mark `is_query_resolvable_from_history = false`
-   - Generate a clarification response asking the user for more details
-   - Skip remaining steps
+Attempt to infer the missing context from the conversation transcript.
 
----
+If the intent can be clearly reconstructed:
 
-## Step 3: Determine Whether Additional KB Retrieval Is Needed
+- Set `resolved_query`
+- Set `is_query_resolvable_from_history = true`
+- Proceed to Step 3
 
-Using `resolved_query`, decide whether you can confidently answer the query using:
-- the conversation transcript
-- the resolved query
-- your built-in general knowledge and reasoning ability
+If the intent CANNOT be confidently reconstructed:
 
-Mark `is_message_history_enough = true` if you can provide a high-quality final answer WITHOUT retrieving additional context from the knowledge base.
-
-This includes cases where:
-- the transcript provides partial context
-- the remaining gaps can be reasonably filled using your own knowledge
-- the answer does not require research-paper-specific evidence
-- no arxiv-specific or highly specialized missing information is necessary
-
-Mark `is_message_history_enough = false` ONLY if:
-- the answer clearly requires additional knowledge from the arxiv knowledge base
-- important research-specific facts, methods, findings, or evidence are missing
-- you cannot confidently answer without retrieving paper context
-
----
-
-## Step 4: Conversation Title Relevancy
-
-If the query is successfully resolved, check if the current conversation title represents the query.
-
-If NOT:
-- Generate a short `new_conversation_title` with maximum length of 5 words which represents the resolved query.
-
----
-
-## Step 5: Produce Output
-
-### Case A — Query NOT resolvable
 Return:
+
 - `is_query_complete = false`
 - `is_query_resolvable_from_history = false`
-- `response` (ask for clarification)
 - `resolved_query = null`
 - `is_message_history_enough = null`
 - `kb_queries = null`
+- `response`
+- `new_conversation_title = null`
+- `force_new_research = false`
+- `new_query_to_research = null`
+
+Stop here.
 
 ---
 
-### Case B — Answer can be generated without KB retrieval
-Return:
-- `is_query_complete`
-- `is_query_resolvable_from_history`
+## Step 3: Detect Forced New Research Intent
+
+Determine whether the user EXPLICITLY wants NEW research retrieval.
+
+This is independent of whether you can answer from built-in knowledge.
+
+Set `force_new_research = true` ONLY if the user explicitly asks for:
+
+- search arxiv
+- latest research
+- recent papers
+- recent studies
+- literature review
+- search the literature
+- find papers
+- retrieve citations
+- newest findings
+- recent publications
+- what does recent research say
+- paper-backed evidence
+- verify with papers
+
+Examples:
+
+- "search arxiv for papers on RAG"
+- "find latest research on LLM agents"
+- "look up recent studies on transformers"
+- "what do recent papers say about this?"
+
+If true:
+
+- generate `new_query_to_research`
+- set `is_message_history_enough = null`
+- generate `kb_queries` which will be used to fetch context after research is done.
+- set `response = null`
+- proceed to Step 5
+
+The KB queries must:
+
+- be specific
+- directly target missing information
+- avoid vague phrasing
+- cover all missing aspects
+
+If false:
+
+- set `force_new_research = false`
+- set `new_query_to_research = null`
+- proceed to Step 4
+
+IMPORTANT:
+Do NOT trigger this for normal explanatory questions unless the user explicitly requests research retrieval.
+
+For example, these should NOT trigger forced research:
+
+- "explain transformers"
+- "how does PPO work?"
+- "what is RAG?"
+
+---
+
+## Step 4: Determine Whether Message History Is Enough
+
+Using:
+
 - `resolved_query`
+- conversation transcript
+- built-in knowledge
+- reasoning ability
+
+decide whether you can confidently answer the query WITHOUT retrieving additional context from the knowledge base.
+
+Set:
+
 - `is_message_history_enough = true`
-- `response` (final answer)
-- `kb_queries = null`
+  if you can answer directly
 
----
-
-### Case C — Additional KB retrieval required
-Return:
-- `is_query_complete`
-- `is_query_resolvable_from_history`
 - `is_message_history_enough = false`
-- `response = null`
-- `kb_queries`:
-  - A list of specific queries to retrieve missing information
-  - Avoid vague phrasing
-  - Cover all missing aspects needed to answer the query
+  if additional knowledge base retrieval is required
+
+Set FALSE only if important missing information is needed such as:
+
+- research-specific methods
+- findings
+- citations
+- paper-specific evidence
+- missing technical context
+
+If retrieval is required, generate `kb_queries`.
+
+The KB queries must:
+
+- be specific
+- directly target missing information
+- avoid vague phrasing
+- cover all missing aspects
 
 ---
 
-## Constraints
+## Step 5: Conversation Title Relevancy
 
-- Use your built-in knowledge when sufficient
+If the query is successfully resolved, determine whether the current conversation title still accurately represents the resolved query.
+
+If not:
+
+generate `new_conversation_title`
+
+Rules:
+- maximum 5 words
+- concise
+- representative of main user intent
+
+Otherwise:
+
+- `new_conversation_title = null`
+
+---
+
+## Step 6: Output Rules
+
+### Case A — Query Not Resolvable
+
+Return:
+
+- `response`
+- all other unavailable fields as null
+- `force_new_research = false`
+
+---
+
+### Case B — Forced New Research
+
+Return:
+
+- `force_new_research = true`
+- `new_query_to_research`
+- `response = null`
+- `kb_queries`
+- `is_message_history_enough = null`
+
+---
+
+### Case C — Message History Enough
+
+Return:
+
+- `is_message_history_enough = true`
+- `response = final answer`
+- `kb_queries = null`
+- `force_new_research = false`
+
+---
+
+### Case D — KB Retrieval Needed
+
+Return:
+
+- `is_message_history_enough = false`
+- `kb_queries`
+- `response = null`
+- `force_new_research = false`
+
+---
+
+## Important Constraints
+
 - Prefer answering directly when possible
-- Generate `kb_queries` only when additional arxiv knowledge is clearly needed
+- Use built-in knowledge when sufficient
+- Do NOT force research unless explicitly requested
 - Do NOT guess highly specific research findings
-- Queries must directly map to missing information
+- Generate precise KB queries
+- `new_query_to_research` must be a single optimized research query
+- `kb_queries` may contain multiple targeted queries
 
 ---
 
 ## Output Format
+
+Return output strictly matching this schema:
 
 {OUTPUT_FORMAT}
 

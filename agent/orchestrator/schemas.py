@@ -9,6 +9,8 @@ class MessageHistoryCoverageCheckerOutput(BaseModel):
     kb_queries: list[str] | None = Field(description="Queries for retrieving missing information from the knowledge base. Null if not needed.")
     response: str | None = Field(description="Final answer if message history is sufficient, OR clarification request if query is not resolvable."    )
     new_conversation_title: str | None = Field(description="New conversation title if previous one was not relevant to the resolved query. Null if no change needed.")
+    force_new_research: bool = Field(description="Should we skip KB retreival and do a new research.")
+    new_query_to_research: str | None = Field(description="If force_new_research is true, this is the query that will be researched. If not, this is null.")
 
 
 class KBContextCoverageCheckerOutput(BaseModel):

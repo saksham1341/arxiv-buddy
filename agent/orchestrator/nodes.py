@@ -43,6 +43,8 @@ async def message_history_coverage_checker(state: State, config: RunnableConfig)
         "is_message_history_enough": resp.is_message_history_enough,
 
         # Retrieval
+        "force_new_research": resp.force_new_research,
+        "new_query_to_research": resp.new_query_to_research,
         "kb_queries": resp.kb_queries,
 
         # Final response (only set when appropriate)
@@ -65,7 +67,7 @@ async def kb_context_fetcher(state: State, config: RunnableConfig):
     await config["configurable"]["notifications"]["notify_gathering_context_call"](conversation_id, state.kb_queries)  # type: ignore
 
     # gather context
-    context = await utils.get_context(kb_client=kb_client, q=state.kb_queries)
+    context = await utils.get_context(kb_client=kb_client, q=state.kb_queries, ids=state.kb_ids)
 
     return {
         "kb_context": context
@@ -92,9 +94,6 @@ async def kb_context_coverage_checker(state: State):
 
 def new_query_researcher_factory(searcher_agent, learner_agent):
     async def new_query_researcher(state: State, config: RunnableConfig):
-        if state.is_kb_context_enough or not state.new_query_to_research:
-            return
-
         conversation_id = config["configurable"]["thread_id"]  # type: ignore
         arxiv_search_call_semaphore = config["configurable"]["arxiv_search_call_semaphore"]  # type: ignore
         kb_client = config["configurable"]["kb_client"]  # type: ignore
@@ -105,7 +104,7 @@ def new_query_researcher_factory(searcher_agent, learner_agent):
         await config["configurable"]["notifications"]["notify_searcher_call"](conversation_id, state.new_query_to_research)  # type: ignore
 
         # get article ids to learn
-        related_articles = await utils.find_relevant_articles_to_learn(searcher_agent, arxiv_search_call_semaphore, conversation_id, state.new_query_to_research)
+        related_articles = await utils.find_relevant_articles_to_learn(searcher_agent, arxiv_search_call_semaphore, conversation_id, state.new_query_to_research)  # type: ignore
         if len(related_articles) == 0:
             return {
                 "query_research_successful": False,
@@ -121,7 +120,8 @@ def new_query_researcher_factory(searcher_agent, learner_agent):
         await asyncio.gather(*[utils.learn_article(kb_client, learner_agent, pdf_parser_pool_executor, pdf_parser_pool_executor_semaphore, conversation_id, article["article_id"], article["pdf_url"], article["abstract"]) for article in related_articles])
 
         return {
-            "query_research_successful": True
+            "query_research_successful": True,
+            "kb_ids": article_ids
         }
     
     return new_query_researcher

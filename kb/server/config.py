@@ -13,7 +13,8 @@ class KBServerConfig(BaseSettings):
     database_password: str = Field(description="Password to connect to the database.")
     database_name: str = Field(default="arxiv_buddy_kb", description="The name of the database.")
 
-    nearest_items_limit: int = Field(default=10, description="The maximum number of nearest items to the query to return.")
+    nearest_items_limit: int = Field(default=100, description="The maximum number of nearest items to the query to return.")
+    query_results_limit: int = Field(default=10, description="The maximum number of parts to return as a response to queries.")
 
 
 config = KBServerConfig()  # type: ignore

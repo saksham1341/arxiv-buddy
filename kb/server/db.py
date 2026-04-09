@@ -41,11 +41,22 @@ async def insert_items(engine: AsyncEngine, items: list[Item]) -> None:
         async with session.begin():
             session.add_all(items)
 
-async def get_closest_items(engine: AsyncEngine, q: list[float], n: int) -> list[Item]:
+async def get_closest_items(engine: AsyncEngine, q: list[float], ids: list[str], n: int) -> list[tuple[Item, float]]:
     async with AsyncSession(engine) as session:
-        res = await session.execute(select(Item).order_by(Item.embedding.l2_distance(q)).limit(n))
-    
-    return [i[0] for i in res] # type: ignore
+        distance = Item.embedding.l2_distance(q)
+
+        stmt = (
+            select(Item, distance)
+            .order_by(distance)
+            .limit(n)
+        )
+
+        if ids:
+            stmt = stmt.where(Item.article_id.in_(ids))
+
+        res = await session.execute(stmt)
+
+    return [(row[0], row[1]) for row in res]
 
 async def get_total_object_count(engine: AsyncEngine, obj: Type[Base]) -> int:
     async with AsyncSession(engine) as session:

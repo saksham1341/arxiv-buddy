@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class State(BaseModel):
@@ -11,8 +11,10 @@ class State(BaseModel):
     user_intent: str | None = None
     is_message_history_enough: bool | None = None
     kb_queries: list[str] | None = None
+    kb_ids: list[str] = Field(default_factory=list)
     kb_context: str | None = None
     is_kb_context_enough: bool = True
+    force_new_research: bool = False
     new_query_to_research: str | None = None
     query_research_successful: bool = True
     ai_response: str | None = None
