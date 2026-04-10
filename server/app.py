@@ -109,10 +109,10 @@ async def send_message_to_chat(req: schemas.SendMessageRequest, conversation_id:
     for item in conv_history:
         if item.item_type == db.ConversationItemTypes.user_message:
             data = json.loads(item.data.decode())
-            message_history_parts.append(f"==== USER MESSAGE ===\n{data['message']}")
+            message_history_parts.append(f"==== USER MESSAGE ===\n{data['message']}\n")
         elif item.item_type == db.ConversationItemTypes.ai_message:
             data = json.loads(item.data.decode())
-            message_history_parts.append(f"=== AI MESSAGE ===\n{data['message']}")
+            message_history_parts.append(f"==== AI MESSAGE ====\n{data['message']}\n")
     message_history = "\n".join(message_history_parts)
 
     # agent run
