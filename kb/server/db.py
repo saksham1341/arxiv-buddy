@@ -9,7 +9,8 @@ from sqlalchemy import (
     DateTime,
     select,
     func,
-    text
+    text,
+    Index
 )
 from sqlalchemy.ext.asyncio import (
     create_async_engine,
@@ -39,6 +40,15 @@ class Item(Base):
     authors: Mapped[str] = mapped_column(String())
     content: Mapped[str] = mapped_column(String)
 
+    __table_args__ = (
+        Index(
+            "ix_knowledgebase_hnsw",
+            "embedding",
+            postgresql_using="hnsw",
+            postgresql_ops={"embedding": "vector_cosine_ops"},
+        ),
+    )
+
 
 async def insert_items(engine: AsyncEngine, items: list[Item]) -> None:
     async with AsyncSession(engine) as session:
@@ -47,7 +57,7 @@ async def insert_items(engine: AsyncEngine, items: list[Item]) -> None:
 
 async def get_closest_items(engine: AsyncEngine, q: list[float], ids: list[str], n: int) -> list[tuple[Item, float]]:
     async with AsyncSession(engine) as session:
-        distance = Item.embedding.l2_distance(q)
+        distance = Item.embedding.cosine_distance(q)
 
         stmt = (
             select(Item, distance)

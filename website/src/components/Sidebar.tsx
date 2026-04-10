@@ -44,6 +44,12 @@ function Sidebar() {
         }
 
         loadSidebarData();
+
+        const _ = setInterval(loadSidebarData, 1000);
+
+        return () => {
+            clearInterval(_);
+        }
     }, [])
 
     return (

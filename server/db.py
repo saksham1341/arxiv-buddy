@@ -1,5 +1,5 @@
 from sqlalchemy.orm import DeclarativeBase, mapped_column, Mapped
-from sqlalchemy import String, TIMESTAMP, Enum, LargeBinary, func, select, URL, ForeignKey
+from sqlalchemy import String, TIMESTAMP, Enum, LargeBinary, func, select, URL, ForeignKey, distinct
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 import enum
@@ -121,6 +121,6 @@ async def add_conversation_item(engine: AsyncEngine, conversation_id: str, item_
 
 async def get_all_conversations(engine: AsyncEngine) -> list[Conversation]:
     async with AsyncSession(engine) as session:
-        all_conversations = await session.execute(select(Conversation))
+        all_conversations = await session.execute(select(Conversation).join(ConversationItem).group_by(Conversation.conversation_id).order_by(func.max(ConversationItem.timestamp).desc()))
     
     return [res[0] for res in all_conversations]
