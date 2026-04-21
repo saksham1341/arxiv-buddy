@@ -7,8 +7,7 @@ class ServerConfig(BaseSettings):
         env_prefix="server_"
     )
 
-    kb_host: str = Field(description="The host address of the kb server.")
-    kb_port: int = Field(description="The port of the kb server.")
+    kb_url: str = Field(description="The url of the kb server.")
 
     website_url: str = Field(default="http://localhost:5173", description="The website url to add to CORS allow list.")
 

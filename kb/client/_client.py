@@ -2,12 +2,11 @@ import httpx
 import asyncio
 from .config import config
 from ..core.article_part import ArticlePart, ArticlePartWithEmbeddableStrings
-from datetime import datetime
 
 
 class KBClient:
-    def __init__(self, host: str, port: int) -> None:
-        self._kb_url = f"http://{host}:{port}"
+    def __init__(self, kb_url: str) -> None:
+        self._kb_url = kb_url
     
     async def status(self) -> dict:
         async with httpx.AsyncClient() as client:

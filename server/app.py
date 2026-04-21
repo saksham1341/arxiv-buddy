@@ -32,7 +32,7 @@ async def lifespan(app: FastAPI):
         database=config.database_name
     ))
 
-    kb_client = KBClient(host=config.kb_host, port=config.kb_port)
+    kb_client = KBClient(kb_url=config.kb_url)
     pdf_parser_pool_executor = ProcessPoolExecutor()
 
     searcher = build_searcher(name="searcher_agent")
@@ -72,6 +72,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"]
 )
+
+@app.get("/")
+async def status():
+    return {
+        "success": True
+    }
 
 @app.post("/chat/{conversation_id}", response_model=schemas.SendMessageResponse)
 async def send_message_to_chat(req: schemas.SendMessageRequest, conversation_id: str = Path(...)):

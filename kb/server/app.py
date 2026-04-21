@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Query
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from ..core.article_part import ArticlePart, ArticlePartWithEmbeddableStrings
 from ..core.embedder import embedder
@@ -39,6 +40,18 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     debug=True,
     lifespan=lifespan
+)
+
+origins = [
+    "*",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"]
 )
 
 class IndexResponse(BaseModel):
