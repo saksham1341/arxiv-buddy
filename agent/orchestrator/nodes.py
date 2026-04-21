@@ -1,4 +1,3 @@
-from langchain.agents import create_agent
 from langchain_core.runnables import RunnableConfig
 from langchain_core.output_parsers import PydanticOutputParser
 from .state import State
@@ -20,7 +19,7 @@ async def message_history_coverage_checker(state: State, config: RunnableConfig)
     conversation_id = config["configurable"]["thread_id"]  # type: ignore
     output_parser = PydanticOutputParser(pydantic_object=schemas.MessageHistoryCoverageCheckerOutput)
     prompt = prompts.MESSAGE_HISTORY_COVERAGE_CHECKER_PROMPT
-    chain = prompt | heavy_llm | output_parser
+    chain = prompt | heavy_llm(config['configurable']['byok']) | output_parser  # type: ignore
 
     resp: schemas.MessageHistoryCoverageCheckerOutput = await chain.ainvoke({
         "OUTPUT_FORMAT": output_parser.get_format_instructions(),
@@ -73,12 +72,12 @@ async def kb_context_fetcher(state: State, config: RunnableConfig):
         "kb_context": context
     }
 
-async def kb_context_coverage_checker(state: State):
+async def kb_context_coverage_checker(state: State, config: RunnableConfig):
     # check if knowledge base context is enough to answer user query
     output_parser = PydanticOutputParser(pydantic_object=schemas.KBContextCoverageCheckerOutput)
     prompt = prompts.KNOWLEDGE_BASE_CONTEXT_COVERAGE_CHECKER_PROMPT
 
-    chain = prompt | heavy_llm | output_parser
+    chain = prompt | heavy_llm(config['configurable']['byok']) | output_parser  # type: ignore
 
     resp = await chain.ainvoke({
         "OUTPUT_FORMAT": output_parser.get_format_instructions(),
@@ -104,7 +103,7 @@ def new_query_researcher_factory(searcher_agent, learner_agent):
         await config["configurable"]["notifications"]["notify_searcher_call"](conversation_id, state.new_query_to_research)  # type: ignore
 
         # get article ids to learn
-        related_articles = await utils.find_relevant_articles_to_learn(searcher_agent, arxiv_search_call_semaphore, conversation_id, state.new_query_to_research)  # type: ignore
+        related_articles = await utils.find_relevant_articles_to_learn(config['configurable']['byok'], searcher_agent, arxiv_search_call_semaphore, conversation_id, state.new_query_to_research)  # type: ignore
         if len(related_articles) == 0:
             return {
                 "query_research_successful": False,
@@ -117,7 +116,7 @@ def new_query_researcher_factory(searcher_agent, learner_agent):
         await config["configurable"]["notifications"]["notify_learner_call"](conversation_id, article_ids)  # type: ignore
 
         # learn
-        await asyncio.gather(*[utils.learn_article(kb_client, learner_agent, pdf_parser_pool_executor, pdf_parser_pool_executor_semaphore, conversation_id, article) for article in related_articles])
+        await asyncio.gather(*[utils.learn_article(config['configurable']['byok'], kb_client, learner_agent, pdf_parser_pool_executor, pdf_parser_pool_executor_semaphore, conversation_id, article) for article in related_articles])  # type: ignore
 
         return {
             "query_research_successful": True,

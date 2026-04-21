@@ -3,7 +3,7 @@ from . import prompts, schemas
 from langchain_core.output_parsers import PydanticOutputParser
 from langchain_core.runnables import RunnableConfig
 from ..llm import light_llm
-from ..config import config
+from ..config import config as _config
 import asyncio
 from bs4 import BeautifulSoup
 import httpx
@@ -13,10 +13,10 @@ from datetime import datetime
 import re
 
 
-async def search_query_generator(state: State):
+async def search_query_generator(state: State, config: RunnableConfig):
     # Check if attempts exhausted
     attempt_count = state.search_attempts + 1
-    if attempt_count > config.maximum_search_attempts:
+    if attempt_count > _config.maximum_search_attempts:
         return {
             "search_attempts": attempt_count,
             "attempts_exhausted": True
@@ -30,7 +30,7 @@ async def search_query_generator(state: State):
         pydantic_object=schemas.SearchQueryGeneratorOutput
     )
 
-    chain = prompt | light_llm | output_parser
+    chain = prompt | light_llm(config["configurable"]["byok"]) | output_parser  # type: ignore
 
     # Serialize previous structured query plans
     past_queries_serialized = json.dumps(
@@ -143,7 +143,7 @@ async def search_arxiv(semaphore: asyncio.Semaphore, query_plan: schemas.SearchQ
 
     results = extract_results_from_arxiv_page(
         response.content
-    )[:config.arxiv_search_article_count]
+    )[:_config.arxiv_search_article_count]
 
     return results
 
@@ -194,11 +194,11 @@ async def fetch_articles(state: State, config: RunnableConfig):
         "past_generated_search_queries": deduped_queries
     }
 
-async def coverage_decider(state: State):
+async def coverage_decider(state: State, config: RunnableConfig):
     prompt = prompts.COVERAGE_DECIDER_QUERY
     output_parser = PydanticOutputParser(pydantic_object=schemas.CoverageDeciderOutput)
 
-    chain = prompt | light_llm | output_parser
+    chain = prompt | light_llm(config["configurable"]["byok"]) | output_parser  # type: ignore
 
     resp = await chain.ainvoke(input={
         "OUTPUT_FORMAT": output_parser.get_format_instructions(),

@@ -5,14 +5,15 @@ import { useNavigate } from 'react-router-dom';
 type InputBarProps = {
     conversation_id: string;
     conversationMetadata: any;
+    geminiAPIKey: string;
 }
 
-function InputBar({ conversation_id, conversationMetadata }: InputBarProps) {
+function InputBar({ conversation_id, conversationMetadata, geminiAPIKey }: InputBarProps) {
     const [classes, setClasses] = useState("empty");
     const ref = useRef<HTMLDivElement>(null);
     const navigator = useNavigate();
 
-    function on_inputbar_value_change(e) {
+    function on_inputbar_value_change(e: any) {
         const content: string = e.currentTarget.textContent ?? "";
         const trimmed_content = content.trim();
         if (trimmed_content === "") {
@@ -25,7 +26,7 @@ function InputBar({ conversation_id, conversationMetadata }: InputBarProps) {
         }
     }
 
-    async function on_key_down(e) {
+    async function on_key_down(e: any) {
         if (e.key == "Enter" && !e.shiftKey) {
             e.preventDefault();
 
@@ -48,7 +49,7 @@ function InputBar({ conversation_id, conversationMetadata }: InputBarProps) {
                 headers: {
                     "Content-Type": "application/json",
                 },
-                body: JSON.stringify({ message: content }),
+                body: JSON.stringify({ message: content, byok: geminiAPIKey }),
                 redirect: "follow"
             });
 

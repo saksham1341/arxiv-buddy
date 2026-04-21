@@ -23,3 +23,16 @@
 .sidebar-item.current {
     background-color: rgb(35, 35, 35);
 }
+
+#byok-setter {
+    padding: 10px;
+    background-color: rgb(35, 35, 35);
+    color: white;
+    outline: none;
+    border-radius: 1em;
+    border: none;
+}
+
+#byok-setter.error {
+    border: 2px red solid;
+}

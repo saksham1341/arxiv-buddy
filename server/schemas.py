@@ -3,6 +3,7 @@ from pydantic import BaseModel, Field
 
 class SendMessageRequest(BaseModel):
     message: str = Field(description="The message to send.")
+    byok: str = Field(description="Your Gemini API Key.")
 
 
 class SendMessageResponse(BaseModel):

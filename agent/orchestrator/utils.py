@@ -8,7 +8,7 @@ from concurrent.futures import ProcessPoolExecutor
 from agent.searcher.state import FetchedArticle
 
 
-async def find_relevant_articles_to_learn(searcher_agent: CompiledStateGraph, arxiv_search_call_semaphore: asyncio.Semaphore, conversation_id: str, q: str) -> list[FetchedArticle]:
+async def find_relevant_articles_to_learn(byok: str, searcher_agent: CompiledStateGraph, arxiv_search_call_semaphore: asyncio.Semaphore, conversation_id: str, q: str) -> list[FetchedArticle]:
     search_results = (await searcher_agent.ainvoke({
         "query": q,  # type: ignore
         "search_attempts": 0,
@@ -19,7 +19,8 @@ async def find_relevant_articles_to_learn(searcher_agent: CompiledStateGraph, ar
     }, config={
         "configurable": {
             "thread_id": conversation_id,
-            "arxiv_search_call_semaphore": arxiv_search_call_semaphore  # type: ignore
+            "arxiv_search_call_semaphore": arxiv_search_call_semaphore,  # type: ignore
+            "byok": byok
         },
     }))
 
@@ -28,7 +29,7 @@ async def find_relevant_articles_to_learn(searcher_agent: CompiledStateGraph, ar
 
     return search_results.get("fetched_articles", [])
 
-async def learn_article(kb_client: KBClient, learner_agent: CompiledStateGraph, pdf_parser_pool_executor: ProcessPoolExecutor, pdf_parser_pool_executor_semaphore: asyncio.Semaphore, conversation_id: str, article: FetchedArticle) -> int:
+async def learn_article(byok: str, kb_client: KBClient, learner_agent: CompiledStateGraph, pdf_parser_pool_executor: ProcessPoolExecutor, pdf_parser_pool_executor_semaphore: asyncio.Semaphore, conversation_id: str, article: FetchedArticle) -> int:
     if await kb_client.is_learned(article.article_id):
         return 0
     
@@ -45,7 +46,8 @@ async def learn_article(kb_client: KBClient, learner_agent: CompiledStateGraph, 
         "configurable": {
             "thread_id": conversation_id,
             "pdf_parser_pool_executor_semaphore": pdf_parser_pool_executor_semaphore,
-            "pdf_parser_pool_executor": pdf_parser_pool_executor
+            "pdf_parser_pool_executor": pdf_parser_pool_executor,
+            "byok": byok
         }
     })).get("article_parts_with_embeddable_strings", [])
 

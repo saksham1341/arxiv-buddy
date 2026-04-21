@@ -5,7 +5,6 @@ from langchain_core.output_parsers import PydanticOutputParser
 from langchain_core.runnables import RunnableConfig
 from .state import State
 from ..llm import light_llm, heavy_llm
-from ..config import config
 from . import prompts, schemas
 from kb.core.article_part import ArticlePart, ArticlePartWithEmbeddableStrings
 import asyncio
@@ -62,9 +61,9 @@ async def split_content(state: State):
         "content_blocks": content_blocks
     }
 
-async def generate_embeddable_strings(state: State):
+async def generate_embeddable_strings(state: State, config: RunnableConfig):
     output_parser = PydanticOutputParser(pydantic_object=schemas.ArticleDescriptionOutputSchema)
-    chain = prompts.ARTICLE_DESCRIPTION_GENERATOR_PROMPT | light_llm | output_parser
+    chain = prompts.ARTICLE_DESCRIPTION_GENERATOR_PROMPT | light_llm(config["configurable"]["byok"]) | output_parser  # type: ignore
 
     # description = (await chain.ainvoke({
     #     "OUTPUT_FORMAT": output_parser.get_format_instructions(),

@@ -22,7 +22,16 @@ type ConversationMetadata = {
     state: string;
 }
 
-function Chat() {
+type ConversationError = {
+    error: string;
+}
+
+type ChatProps = {
+    geminiAPIKey: string;
+}
+
+
+function Chat({ geminiAPIKey }: ChatProps) {
     const navigate = useNavigate();
     const { conversation_id } = useParams<ParamsType>();
     const [ conversationMetadata, setConversationMetadata ] = useState<ConversationMetadata>({ title: "New Conversation", state: "busy" })
@@ -50,6 +59,14 @@ function Chat() {
         setConversationMessages(data);
     }
 
+    function handleConversationError(data: ConversationError[]) {
+        // handle error message from SSE
+
+        console.log("HELLO");
+
+        alert("Some error occured! Make sure your Gemini API key is correct.");
+    }
+
     useEffect(() => {
         // initiate connection to chat
         const server_url = import.meta.env.VITE_API_URL;
@@ -60,10 +77,13 @@ function Chat() {
         eventSource.onmessage = (event) => {
             const message = JSON.parse(event.data);
 
+            console.log(message);
+
             if (message.type == "conversation_not_found") navigate("/");
             else if (message.type == "conversation_metadata") handleConversationMetadata(message.data);
             else if (message.type == "conversation_history") handleConversationHistory(message.data);
             else if (message.type == "conversation_message") handleConversationMessage(message.data);
+            else if (message.type == "error") handleConversationError(message.data);
             else {
                 console.log(`Received unkown message from server. ${message}`);
             }
@@ -111,7 +131,7 @@ function Chat() {
         <div ref={ ref } id="chat">
             {conversationMessages.map(parseConversationMessageToComponent).filter((item) => item != null)}
         </div>
-        <InputBar conversation_id={ conversation_id ? conversation_id : "" } conversationMetadata ={ conversationMetadata } />
+        <InputBar conversation_id={ conversation_id ? conversation_id : "" } conversationMetadata ={ conversationMetadata } geminiAPIKey={ geminiAPIKey }/>
         </>
     )
 }

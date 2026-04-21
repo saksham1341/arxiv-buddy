@@ -2,10 +2,14 @@ from langchain_google_genai.chat_models import ChatGoogleGenerativeAI
 from .config import config
 
 
-light_llm = ChatGoogleGenerativeAI(
-    model=config.light_llm_model
-)
+def light_llm(byok: str):
+    return ChatGoogleGenerativeAI(
+        model=config.light_llm_model,
+        api_key=byok
+    )
 
-heavy_llm = ChatGoogleGenerativeAI(
-    model=config.heavy_llm_model
-)
+def heavy_llm(byok: str):
+    return ChatGoogleGenerativeAI(
+        model=config.heavy_llm_model,
+        api_key=byok
+    )

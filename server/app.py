@@ -12,6 +12,7 @@ import json
 import uuid
 from datetime import datetime
 from concurrent.futures import ProcessPoolExecutor
+import traceback
 
 # agents
 from agent.learner import build_learner
@@ -130,11 +131,16 @@ async def send_message_to_chat(req: schemas.SendMessageRequest, conversation_id:
                     "kb_client": app.state.kb_client,
                     "pdf_parser_pool_executor_semaphore": app.state.pdf_parser_pool_executor_semaphore,
                     "pdf_parser_pool_executor": app.state.pdf_parser_pool_executor,
-                    "arxiv_search_call_semaphore": app.state.arxiv_search_call_semaphore
+                    "arxiv_search_call_semaphore": app.state.arxiv_search_call_semaphore,
+                    "byok": req.byok
                 }
             })
+        except BaseException:
+            traceback.print_exc()
+            await db.add_conversation_item(engine=app.state.engine, conversation_id=conversation_id, item_type=db.ConversationItemTypes.error, data=json.dumps({ "error": "Some error occured!" }).encode())
         finally:
             await db.upsert_conversation(app.state.engine, conversation_id, state=db.ConversationStates.free)
+            await db.add_conversation_item(engine=app.state.engine, conversation_id=conversation_id, item_type=db.ConversationItemTypes.conversation_metadata_change, data=json.dumps({ "state": db.ConversationStates.free.value }).encode())
     
     asyncio.create_task(run_agent_as_task())
 
@@ -180,9 +186,13 @@ async def connect_to_chat(conversation_id: str = Path(...)):
         for item in new_items:
             # metadata changes are a different type of event
             if item.item_type == db.ConversationItemTypes.conversation_metadata_change:
-                
                 yield {
                     "type": "conversation_metadata",
+                    "data": json.loads(item.data)
+                }
+            elif item.item_type == db.ConversationItemTypes.error:
+                yield {
+                    "type": "error",
                     "data": json.loads(item.data)
                 }
             else:

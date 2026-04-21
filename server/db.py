@@ -30,6 +30,7 @@ class ConversationItemTypes(enum.Enum):
     gather_context_call = "gather_context_call"
     ai_message = "ai_message"
     conversation_metadata_change = "conversation_metadata_change"
+    error = "error"
 
 
 class ConversationItem(Base):
