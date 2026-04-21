@@ -4,12 +4,40 @@ import NotFound from './pages/NotFound'
 import NewChat from './pages/NewChat'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import Sidebar from './components/Sidebar'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import Connecting from './pages/Connecting'
 
 function App() {
   const [ geminiAPIKey, setGeminiAPIKey ] = useState<string>("");
+  const [ areServersUp, setAreServersUp ] = useState<boolean>(false);
 
-  return (
+  useEffect(() => {
+    async function _() {
+      const resp = await fetch(import.meta.env.VITE_API_URL, { method: "GET" });
+
+      if (!resp.ok || !(await resp.json()).success) {
+        setAreServersUp(false);
+        setTimeout(_, 5000);
+        return;
+      }
+
+      const resp2 = await fetch(import.meta.env.VITE_API_URL_2, { method: "GET" });
+
+      if (!resp2.ok || !(await resp2.json()).success) {
+        setAreServersUp(false);
+        setTimeout(_, 5000);
+        return;
+      }
+
+      setAreServersUp(true);
+
+      return;
+    }
+
+    _();
+  }, [])
+
+  return areServersUp ? (
     <>
     <BrowserRouter>
       <Routes>
@@ -26,7 +54,7 @@ function App() {
       </div>
     </BrowserRouter>
     </>
-  )
+  ) : (<Connecting />);
 }
 
 export default App
