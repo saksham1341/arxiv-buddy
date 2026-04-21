@@ -10,32 +10,52 @@ import Connecting from './pages/Connecting'
 function App() {
   const [ geminiAPIKey, setGeminiAPIKey ] = useState<string>("");
   const [ areServersUp, setAreServersUp ] = useState<boolean>(false);
-
+  
   useEffect(() => {
-    async function _() {
-      const resp = await fetch(import.meta.env.VITE_API_URL, { method: "GET" });
+    let isMounted: boolean = true;
+    let timeoutId: number;
 
-      if (!resp.ok || !(await resp.json()).success) {
-        setAreServersUp(false);
-        setTimeout(_, 5000);
-        return;
+    async function checkServers() {
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 3000);
+
+        const [resp1, resp2] = await Promise.all([
+          fetch(import.meta.env.VITE_API_URL, { signal: controller.signal }),
+          fetch(import.meta.env.VITE_API_URL_2, { signal: controller.signal }),
+        ]);
+
+        clearTimeout(timeout);
+
+        const [data1, data2] = await Promise.all([
+          resp1.json(),
+          resp2.json(),
+        ]);
+
+        const bothUp =
+          resp1.ok && data1.success &&
+          resp2.ok && data2.success;
+
+        if (isMounted) {
+          setAreServersUp(bothUp);
+        }
+      } catch (err) {
+        if (isMounted) {
+          setAreServersUp(false);
+        }
       }
 
-      const resp2 = await fetch(import.meta.env.VITE_API_URL_2, { method: "GET" });
-
-      if (!resp2.ok || !(await resp2.json()).success) {
-        setAreServersUp(false);
-        setTimeout(_, 5000);
-        return;
-      }
-
-      setAreServersUp(true);
-
-      return;
+      // schedule next check
+      timeoutId = setTimeout(checkServers, 5000);
     }
 
-    _();
-  }, [])
+    checkServers();
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timeoutId);
+    };
+  }, []);
 
   return areServersUp ? (
     <>
