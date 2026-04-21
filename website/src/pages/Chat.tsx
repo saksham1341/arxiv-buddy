@@ -62,7 +62,7 @@ function Chat({ geminiAPIKey }: ChatProps) {
     function handleConversationError(data: ConversationError[]) {
         // handle error message from SSE
 
-        console.log("HELLO");
+        console.log(data);
 
         alert("Some error occured! Make sure your Gemini API key is correct.");
     }

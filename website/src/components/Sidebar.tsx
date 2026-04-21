@@ -17,7 +17,7 @@ function BYOKSetter({ setGeminiAPIKey }: BYOKSetterProps) {
     const ref = useRef<HTMLInputElement>(null);
     const [ showError, setShowError ] = useState<boolean>(true);
 
-    function handleChange(e: any) {
+    function handleChange() {
         const api_key = ref.current?.value.trim();
 
         setGeminiAPIKey(api_key?? "");
